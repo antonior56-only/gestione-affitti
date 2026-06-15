@@ -1,0 +1,3104 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestione Affitti Brevi - PMS Pro v5.10</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary: #2c3e50; --accent: #3498db; --success: #27ae60; 
+            --danger: #e74c3c; --warning: #f1c40f; --light: #ecf0f1; --dark: #34495e;
+            --status-caparra: #f39c12; --status-saldo: #2ecc71; --status-confermata: #3498db; --status-cancellata: #95a5a6;
+            --whatsapp: #25D366;
+        }
+
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; margin: 0; background-color: #f4f7f6; color: var(--dark); }
+        header { background-color: var(--primary); color: white; padding: 1rem 2rem; text-align: center; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+        nav { display: flex; justify-content: center; background: white; border-bottom: 1px solid #ddd; position: sticky; top: 0; z-index: 100; flex-wrap: wrap; }
+        nav button { padding: 1rem 1.5rem; border: none; background: none; cursor: pointer; font-weight: 600; color: var(--dark); transition: 0.3s; }
+        nav button:hover { color: var(--accent); background: #f9f9f9; }
+        nav button.active { color: var(--accent); border-bottom: 3px solid var(--accent); }
+        .container { padding: 2rem; max-width: 1200px; margin: 0 auto; }
+        .card { background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); margin-bottom: 2rem; }
+        .table-responsive { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; margin-bottom: 1rem; }
+        h2 { border-left: 5px solid var(--accent); padding-left: 10px; margin-top: 0; }
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; }
+        .form-group { margin-bottom: 1rem; }
+        label { display: block; margin-bottom: 0.5rem; font-size: 0.9rem; font-weight: bold; }
+        input, select, textarea { width: 100%; padding: 0.6rem; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        .btn { padding: 0.7rem 1.5rem; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; transition: 0.2s; margin-top: 10px; display: inline-block; text-align: center; text-decoration: none; }
+        .btn-primary { background: var(--accent); color: white; } .btn-success { background: var(--success); color: white; } .btn-danger { background: var(--danger); color: white; } .btn-warning { background: var(--warning); color: var(--dark); }
+        .btn-whatsapp { background: var(--whatsapp); color: white; }
+        table { width: 100%; border-collapse: collapse; background: white; font-size: 0.9rem; }
+        th, td { border: 1px solid #eee; padding: 8px; text-align: left; } th { background: #f8f9fa; }
+        table.gantt th, table.gantt td { text-align: center; min-width: 30px; padding: 5px; font-size: 0.8rem; }
+        
+        .booked-confermata { background: var(--status-confermata); color: white; cursor: pointer; border-radius: 4px; }
+        .booked-caparra { background: var(--status-caparra); color: white; cursor: pointer; border-radius: 4px; }
+        .booked-saldo { background: var(--status-saldo); color: white; cursor: pointer; border-radius: 4px; }
+        .booked-cancellata { background: var(--status-cancellata); color: white; cursor: pointer; border-radius: 4px; opacity: 0.5; }
+        
+        .booked-legend { display: flex; gap: 15px; margin-bottom: 10px; font-size: 0.85rem; }
+        .legend-item { display: flex; align-items: center; gap: 5px; }
+        .legend-color { width: 15px; height: 15px; border-radius: 3px; }
+
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1.5rem; }
+        .stat-item { text-align: center; padding: 1.5rem; border-radius: 10px; color: white; }
+        .stat-revenue { background: var(--success); } .stat-expenses { background: var(--danger); } .stat-net { background: var(--primary); } .stat-tax { background: var(--warning); color: var(--dark); }
+        .tab-content { display: none; } .tab-content.active { display: block; }
+        .settings-section { border: 1px solid #ddd; padding: 15px; border-radius: 5px; margin-bottom: 20px; }
+        .settings-section h3 { margin-top: 0; color: var(--primary); border-bottom: 1px solid #ddd; padding-bottom: 5px; }
+        
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.6); z-index: 1000; align-items: center; justify-content: center; }
+        .modal-box { background: white; padding: 20px; border-radius: 8px; width: 90%; max-width: 600px; box-shadow: 0 5px 15px rgba(0,0,0,0.3); max-height: 90vh; overflow-y: auto; }
+        .modal-box h3 { margin-top: 0; color: var(--primary); display: flex; align-items: center; gap: 10px; }
+        
+        #preview-box { background: #e8f4f8; padding: 15px; border-radius: 8px; margin-top: 15px; border: 1px solid #bce8f1; display: none; }
+        #conflict-warning { color: var(--danger); font-weight: bold; margin-top: 10px; display: none; }
+        .editing-mode { border: 2px dashed var(--warning); background-color: #fffaf0; padding: 20px; border-radius: 8px; }
+
+        /* Dashboard Charts */
+        .dashboard-charts { display: grid; grid-template-columns: 2fr 1fr; gap: 20px; margin-bottom: 20px; }
+        .chart-container { background: white; padding: 15px; border-radius: 8px; border: 1px solid #eee; position: relative; height: 300px;}
+        .occupancy-bar-container { background: #eee; border-radius: 10px; height: 25px; width: 100%; overflow: hidden; margin-top: 10px; position: relative;}
+        .occupancy-bar { background: var(--accent); height: 100%; transition: width 0.5s ease-in-out; }
+        .occupancy-text { position: absolute; width: 100%; text-align: center; top: 3px; font-weight: bold; color: #333; font-size: 0.9rem;}
+
+        #backup-reminder { display:none; background:#fff3cd; border:1px solid #f39c12; border-left:5px solid #f39c12;
+            padding:10px 15px; border-radius:5px; margin:10px 0; font-size:0.88rem; }
+        #backup-reminder button { float:right; background:none; border:1px solid #f39c12; border-radius:3px;
+            cursor:pointer; padding:2px 8px; font-size:0.8rem; color:#856404; }
+            
+        .booking-filters { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:15px; align-items:flex-end; }
+        .booking-filters .form-group { margin-bottom:0; min-width:130px; }
+        /* Tasto ricerca globale nella nav */
+        #nav-search-btn { background: none; border: 1px solid #ddd !important; border-radius: 20px !important;
+            padding: 0.4rem 0.8rem !important; font-size: 0.85rem !important; color: #666 !important; }
+        #nav-search-btn:hover { background: #f0f0f0 !important; }
+        #global-search-results a { display:block; padding:5px 8px; border-radius:4px; color:var(--primary); text-decoration:none; cursor:pointer; }
+        #global-search-results a:hover { background:#eaf4fb; }
+        #global-search-results .sr-section { font-weight:bold; color:#888; font-size:0.78rem; padding:4px 8px 2px; text-transform:uppercase; }
+
+        #toast { position:fixed; bottom:20px; right:20px; background:#2c3e50; color:white;
+            padding:10px 20px; border-radius:8px; font-size:0.9rem; z-index:9999;
+            opacity:0; transition:opacity 0.3s; pointer-events:none; }
+        #toast.show { opacity:1; }
+        #toast.success { background:#27ae60; }
+        #toast.error   { background:#e74c3c; }
+        @keyframes rowFlash {
+            0%   { background-color: #d5f5e3; }
+            60%  { background-color: #a9dfbf; }
+            100% { background-color: transparent; }
+        }
+        .row-flash { animation: rowFlash 1.2s ease-out; }
+        .net-positive { color: var(--success); font-weight:bold; }
+        .net-negative { color: var(--danger); font-weight:bold; }
+        .report-filters { display:flex; gap:15px; flex-wrap:wrap; margin-bottom:15px; align-items:center; }
+
+        /* Autocomplete suggerimenti rubrica */
+        .autocomplete-wrapper { position:relative; }
+        .autocomplete-list { position:absolute; top:100%; left:0; right:0; background:white; border:1px solid #3498db;
+            border-top:none; border-radius:0 0 6px 6px; z-index:500; max-height:220px; overflow-y:auto;
+            box-shadow:0 4px 12px rgba(0,0,0,0.12); }
+        .autocomplete-item { padding:10px 14px; cursor:pointer; font-size:0.9rem; border-bottom:1px solid #f0f0f0; display:flex; justify-content:space-between; align-items:center; }
+        .autocomplete-item:hover { background:#eaf4fb; }
+
+        /* Rubrica tab */
+        .guest-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:15px; }
+        .guest-card { background:white; border:1px solid #e0e6ed; border-radius:8px; padding:15px;
+            box-shadow:0 2px 6px rgba(0,0,0,0.05); transition:0.2s; }
+        .guest-card:hover { box-shadow:0 4px 14px rgba(52,152,219,0.15); border-color:#3498db; }
+        .guest-card-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px; border-bottom: 1px solid #eee; padding-bottom: 8px;}
+        .guest-card-name { font-weight:bold; font-size:1.1rem; color:#2c3e50; }
+        .guest-card-detail { font-size:0.85rem; color:#555; margin:4px 0; }
+        .rubrica-search { display:flex; gap:10px; margin-bottom:15px; flex-wrap:wrap; align-items:flex-end; }
+        .rubrica-search input { max-width:280px; }
+
+        /* ── Tabella Tariffe ────────────────────────────────── */
+        #settings-rates-table { table-layout: auto; }
+        #settings-rates-table th { white-space: nowrap; font-size: 0.82rem; padding: 6px 8px; }
+        #settings-rates-table td { padding: 5px 6px; vertical-align: middle; }
+        .rate-input-name  { width: 100%; min-width: 90px; }
+        .rate-input-app   { width: 100%; min-width: 110px; }
+        .rate-input-date  { width: 100%; min-width: 120px; }
+        .rate-input-price { width: 100%; min-width: 70px; }
+
+        /* ── Tabella Appartamenti ────────────────────────────── */
+        #settings-apps-table th { font-size: 0.85rem; padding: 6px 8px; }
+        #settings-apps-table td { padding: 5px 6px; vertical-align: middle; }
+        #settings-apps-table td:nth-child(2) input { width: 100%; min-width: 120px; }
+        #settings-apps-table td:nth-child(3) input { width: 70px; }
+
+        /* ── Elenco prenotazioni – colonne più leggibili ─────── */
+        #booking-list td { vertical-align: middle; }
+        #booking-list td:nth-child(5) { white-space: nowrap; font-size: 0.85rem; }
+        #booking-list td button { font-size: 0.9rem; }
+
+        /* ── Booking filters wrap ────────────────────────────── */
+        .booking-filters { gap: 8px; }
+        .booking-filters .form-group { min-width: 120px; flex: 1; }
+
+        /* ── Report filters ──────────────────────────────────── */
+        .report-filters { align-items: flex-end; }
+        .report-filters .form-group { min-width: 130px; flex: 1; }
+
+        /* ── Guest card rubrica ──────────────────────────────── */
+        .guest-card { transition: box-shadow 0.2s, border-color 0.2s; }
+
+        /* ── Modal scroll su mobile ──────────────────────────── */
+        .modal-overlay { align-items: flex-start; padding: 20px 0; overflow-y: auto; }
+        @media (min-width: 769px) {
+            .modal-overlay { align-items: center; padding: 0; overflow-y: hidden; }
+        }
+
+        /* ── Gantt scrollabile con intestazione fissa ─────────── */
+        .gantt-wrapper { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        table.gantt { min-width: 600px; }
+        table.gantt td:first-child, table.gantt th:first-child {
+            position: sticky; left: 0; background: white; z-index: 2;
+            box-shadow: 2px 0 4px rgba(0,0,0,0.08);
+        }
+        table.gantt thead th:first-child { background: #f8f9fa; }
+
+        /* ── Stats grid min-width più basso ──────────────────── */
+        .stats-grid { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+
+        /* ── Form grid adattivo ──────────────────────────────── */
+        .form-grid { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+
+        @media (max-width: 768px) {
+            body { font-size: 14px; }
+            .container { padding: 0.5rem; }
+            .card { padding: 1rem; border-radius: 6px; margin-bottom: 1rem; }
+            header { padding: 1rem; }
+            h1 { font-size: 1.5rem; margin-bottom: 0.2rem; }
+            
+            nav { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 2px; padding: 5px; }
+            nav button { padding: 0.55rem 0.15rem; font-size: 0.78rem; border-radius: 4px; border-bottom: none; background: #f8f9fa; }
+            nav button.active { background: var(--accent); color: white; border-bottom: none; }
+            #btn-esci { font-size: 0.72rem; padding: 0.55rem 0.1rem; }
+            #today-movements-list li { flex-wrap: wrap; gap: 5px; }
+            #today-movements-list li span { font-size: 0.85rem; }
+            .booking-filters { gap: 6px; }
+            .booking-filters .form-group { min-width: 110px; }
+            
+            .form-grid { grid-template-columns: 1fr; gap: 0.8rem; }
+            .btn { width: 100%; padding: 0.8rem; font-size: 1rem; display: block; margin-top: 5px; }
+            input, select, textarea { padding: 0.8rem; font-size: 1rem; }
+            
+            .override-container { flex-direction: column !important; gap: 10px !important; }
+            .override-container input { width: 100% !important; margin: 0 !important; }
+            .override-container button { width: 100% !important; margin: 0 !important; }
+            
+            .stats-grid { grid-template-columns: repeat(2, 1fr); gap: 0.8rem; }
+            .stat-item { padding: 1rem; font-size: 0.95rem; }
+            .stat-item h3 { font-size: 0.9rem; margin-bottom: 0.3rem; }
+            .stat-item p  { font-size: 1.1rem; margin: 0; }
+            
+            .modal-box { width: 96%; padding: 15px; margin: 15px auto; max-height: 85vh; }
+            .modal-box .btn { width: 100%; margin-bottom: 5px; margin-top: 0; }
+            .modal-box div[style*="display: flex; gap: 10px;"] { flex-direction: column; gap: 5px; }
+            .modal-overlay { padding-top: 10px; padding-bottom: 10px; }
+            
+            .booked-legend { flex-wrap: wrap; justify-content: center; }
+
+            .dashboard-charts { grid-template-columns: 1fr; }
+            .chart-container { height: 250px; }
+
+            table:not(.gantt):not(#settings-rates-table) { display: block; width: 100%; }
+            table:not(.gantt):not(#settings-rates-table) thead { display: none; }
+            table:not(.gantt):not(#settings-rates-table) tbody { display: block; width: 100%; }
+            table:not(.gantt):not(#settings-rates-table) tr { display: block; margin-bottom: 15px; border: 1px solid #ddd; border-radius: 8px; background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.05); }
+            table:not(.gantt):not(#settings-rates-table) td { display: flex; justify-content: space-between; align-items: center; padding: 10px; border: none; border-bottom: 1px solid #eee; text-align: right; }
+            table:not(.gantt):not(#settings-rates-table) td:last-child { border-bottom: none; justify-content: center; flex-wrap: wrap; gap: 5px; }
+            /* Tabella tariffe: scroll orizzontale su mobile invece di card-stack */
+            #settings-rates-table { display: table; font-size: 0.75rem; min-width: 500px; }
+            #settings-rates-table thead { display: table-header-group; }
+            #settings-rates-table tbody { display: table-row-group; }
+            #settings-rates-table tr  { display: table-row; margin: 0; border: none; border-radius: 0; box-shadow: none; }
+            #settings-rates-table td  { display: table-cell; padding: 4px 3px; border: 1px solid #eee; text-align: left; }
+            
+            #booking-list td:nth-child(1):before { content: "Stato:"; font-weight: bold; text-align: left; }
+            #booking-list td:nth-child(2):before { content: "Canale:"; font-weight: bold; text-align: left; }
+            #booking-list td:nth-child(3):before { content: "Appartamento:"; font-weight: bold; text-align: left; }
+            #booking-list td:nth-child(4):before { content: "Ospite:"; font-weight: bold; text-align: left; }
+            #booking-list td:nth-child(5):before { content: "Periodo:"; font-weight: bold; text-align: left; }
+            #booking-list td:nth-child(6):before { content: "Totale:"; font-weight: bold; text-align: left; }
+            
+            #expense-list td:nth-child(1):before { content: "Data:"; font-weight: bold; text-align: left; }
+            #expense-list td:nth-child(2):before { content: "Appartamento:"; font-weight: bold; text-align: left; }
+            #expense-list td:nth-child(3):before { content: "Categoria:"; font-weight: bold; text-align: left; }
+            #expense-list td:nth-child(4):before { content: "Descrizione:"; font-weight: bold; text-align: left; }
+            #expense-list td:nth-child(5):before { content: "Importo:"; font-weight: bold; text-align: left; }
+
+            #settings-apps-table td:nth-child(1):before { content: "ID:"; font-weight: bold; text-align: left; }
+            #settings-apps-table td:nth-child(2):before { content: "Nome:"; font-weight: bold; text-align: left; }
+            #settings-apps-table td:nth-child(3):before { content: "Posti:"; font-weight: bold; text-align: left; }
+
+            #settings-rates-table td:nth-child(1):before { content: "Nome Tariffa:"; font-weight: bold; text-align: left; }
+            #settings-rates-table td:nth-child(2):before { content: "Appartamento:"; font-weight: bold; text-align: left; }
+            #settings-rates-table td:nth-child(3):before { content: "Inizio:"; font-weight: bold; text-align: left; }
+            #settings-rates-table td:nth-child(4):before { content: "Fine:"; font-weight: bold; text-align: left; }
+            #settings-rates-table td:nth-child(5):before { content: "€/Giorno:"; font-weight: bold; text-align: left; }
+            #settings-rates-table td:nth-child(6):before { content: "€/Settimana:"; font-weight: bold; text-align: left; }
+            
+            table:not(.gantt):not(#settings-rates-table) td button.btn { padding: 8px 12px; margin: 2px; font-size: 1rem; flex: 1; min-width: 40px; }
+            table:not(.gantt):not(#settings-rates-table) td input,
+            table:not(.gantt):not(#settings-rates-table) td select { width: 55%; margin-left: 8px; font-size: 1rem; }
+            #settings-apps-table td input  { width: 58% !important; }
+            #settings-rates-table td input, #settings-rates-table td select { width: 100%; font-size: 0.8rem; padding: 3px; }
+            table:not(.gantt):not(#settings-rates-table) tfoot { display: block; }
+            table:not(.gantt):not(#settings-rates-table) tfoot tr { background: #fdfdfd; }
+            table:not(.gantt):not(#settings-rates-table) tfoot td { display: block; text-align: center; }
+            table:not(.gantt):not(#settings-rates-table) tfoot td:first-child { display: none; }
+        }
+
+        /* ── Tablet (769px - 1024px) ─────────────────────────── */
+        @media (min-width: 769px) and (max-width: 1024px) {
+            .container { padding: 1rem; }
+            .form-grid { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+            .dashboard-charts { grid-template-columns: 1.5fr 1fr; }
+            .stats-grid { grid-template-columns: repeat(2, 1fr); }
+            #settings-rates-table th, #settings-rates-table td { font-size: 0.8rem; padding: 5px; }
+        }
+
+        /* ── Desktop largo (>1200px) ─────────────────────────── */
+        @media (min-width: 1200px) {
+            .container { padding: 2rem 1rem; }
+            #settings-rates-table { font-size: 0.9rem; }
+            .rate-input-name  { min-width: 110px; }
+            .rate-input-date  { min-width: 130px; }
+            .rate-input-price { min-width: 80px; }
+        }
+
+        /* ── Print ───────────────────────────────────────────── */
+        @media print {
+            nav, #backup-reminder, .btn, #toast { display: none !important; }
+            .tab-content { display: block !important; }
+            .container { max-width: 100%; padding: 0; }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Gestore Affitti Brevi PRO v5.10</h1>
+    <p>Dashboard Visiva | Gestione Saldi e Caparre | WhatsApp | Backup Intelligente</p>
+</header>
+<div id="backup-reminder" style="margin:0; border-radius:0; border-left:5px solid #f39c12; padding:10px 20px; background:#fff3cd; font-size:0.88rem; display:none;">
+    ⚠️ <strong>Backup non eseguito da più di 7 giorni.</strong> Andate in Impostazioni → Esporta Backup per mettere al sicuro i vostri dati.
+    <button onclick="document.getElementById('backup-reminder').style.display='none'" style="float:right;background:none;border:1px solid #f39c12;border-radius:3px;cursor:pointer;padding:2px 8px;color:#856404;">✕ Ignora</button>
+</div>
+<div id="toast" style="position:fixed;bottom:20px;right:20px;padding:10px 20px;border-radius:8px;font-size:0.9rem;z-index:9999;opacity:0;transition:opacity 0.3s;pointer-events:none;color:white;background:#2c3e50;"></div>
+
+<nav>
+    <button onclick="showTab('dashboard')" id="btn-dashboard" class="active">Occupazione</button>
+    <button onclick="showTab('prenotazioni')" id="btn-prenotazioni">Prenotazioni</button>
+    <button onclick="showTab('rubrica')" id="btn-rubrica">👥 Rubrica</button>
+    <button onclick="showTab('spese')" id="btn-spese">Spese</button>
+    <button onclick="showTab('report')" id="btn-report">Report Contabile</button>
+    <button onclick="showTab('impostazioni')" id="btn-impostazioni">Impostazioni</button>
+    <button onclick="openGlobalSearch()" id="nav-search-btn" title="Ricerca globale (Ctrl+F)">🔍</button>
+    <button onclick="safeExit()" id="btn-esci" style="background-color: var(--danger); color: white; margin-left: 5px; border-radius: 4px;">🔴 Esci e Salva</button>
+</nav>
+<div id="global-search-bar" style="display:none; background:#f8f9fa; border-bottom:1px solid #ddd; padding:6px 16px; position:sticky; top:52px; z-index:99;">
+    <div style="max-width:1200px; margin:0 auto; display:flex; align-items:center; gap:10px;">
+        <span style="color:#888; font-size:1rem;">🔍</span>
+        <input type="text" id="global-search-input" placeholder="Cerca in prenotazioni, ospiti, spese…"
+            oninput="runGlobalSearch(this.value)"
+            style="flex:1; border:none; background:transparent; font-size:0.95rem; outline:none; padding:4px 0;">
+        <button onclick="closeGlobalSearch()" style="background:none;border:none;cursor:pointer;font-size:1.1rem;color:#888;">✕</button>
+    </div>
+    <div id="global-search-results" style="max-width:1200px; margin:4px auto 0; font-size:0.88rem;"></div>
+</div>
+
+<div class="container">
+    
+    <div id="dashboard" class="tab-content active">
+        
+        <!-- NUOVA SEZIONE: Movimenti di Oggi -->
+        <div class="card" style="border-left: 5px solid var(--warning); padding: 15px;">
+            <h2 style="border-color: var(--warning); font-size: 1.2rem; margin-bottom: 15px;">🔄 Movimenti di Oggi (<span id="today-date-display"></span>)</h2>
+            <div id="today-movements-list">
+                <!-- Riempito tramite JavaScript -->
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Disponibilità (Gantt)</h2>
+            <div class="booked-legend">
+                <div class="legend-item"><div class="legend-color" style="background:var(--status-confermata);"></div>Confermata</div>
+                <div class="legend-item"><div class="legend-color" style="background:var(--status-caparra);"></div>Caparra / Acconto</div>
+                <div class="legend-item"><div class="legend-color" style="background:var(--status-saldo);"></div>Saldo completato</div>
+                <div class="legend-item"><div class="legend-color" style="background:var(--status-cancellata);"></div>Cancellata</div>
+            </div>
+            <div class="gantt-wrapper" id="gantt-chart"></div>
+            <p style="font-size: 0.85rem; color: #666; margin-top: 10px;"><i>Clicca su un blocco colorato per aprire la scheda rapida.</i></p>
+        </div>
+
+        <div class="dashboard-charts">
+            <div class="chart-container">
+                <h3 style="margin-top:0; color:var(--dark); font-size:1rem;">Andamento Entrate Mensili</h3>
+                <canvas id="revenueChart"></canvas>
+            </div>
+            <div class="chart-container">
+                <h3 style="margin-top:0; color:var(--dark); font-size:1rem;">Prenotazioni per Canale</h3>
+                <canvas id="channelChart"></canvas>
+            </div>
+        </div>
+        
+        <div class="card" style="margin-bottom: 20px; padding: 15px;">
+            <h3 style="margin-top:0; color:var(--dark); font-size:1rem;">Tasso di Occupazione (Stagione Configurata)</h3>
+            <div class="occupancy-bar-container">
+                <div id="occ-bar" class="occupancy-bar" style="width: 0%;"></div>
+                <div id="occ-text" class="occupancy-text">0%</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="prenotazioni" class="tab-content">
+        <div class="card" id="booking-form-container">
+            <h2 id="form-title">Nuova Prenotazione</h2>
+            <form id="booking-form">
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Appartamento</label>
+                        <select id="b-app" required onchange="updatePreview()"></select>
+                    </div>
+                    <div class="form-group">
+                        <label>Check-in</label>
+                        <input type="date" id="b-start" required onchange="updatePreview()">
+                    </div>
+                    <div class="form-group">
+                        <label>Check-out <span id="nights-counter" style="color:var(--accent); font-weight:normal; font-size:0.85rem;"></span></label>
+                        <input type="date" id="b-end" required onchange="updatePreview()">
+                    </div>
+                </div>
+                
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Stato <small style="font-weight:normal;color:#888;">(aggiornato automaticamente dai pagamenti)</small></label>
+                        <select id="b-status">
+                            <option value="confermata">Confermata</option>
+                            <option value="caparra">Caparra / Acconto ricevuto</option>
+                            <option value="saldo">Saldo completato</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Canale</label>
+                        <select id="b-channel">
+                            <option>Diretto</option><option>Airbnb</option><option>Booking.com</option><option>Vrbo</option><option>Altro</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-grid">
+                    <div class="form-group autocomplete-wrapper">
+                        <label>Cognome</label>
+                        <input type="text" id="b-surname" required autocomplete="off"
+                            oninput="guestAutocomplete(this.value)"
+                            onblur="setTimeout(()=>document.getElementById('guest-suggestions').innerHTML='',200)">
+                        <div id="guest-suggestions" class="autocomplete-list"></div>
+                    </div>
+                    <div class="form-group"><label>Nome</label><input type="text" id="b-name" required></div>
+                    <div class="form-group"><label>Telefono</label><input type="tel" id="b-tel" placeholder="Es. +39 333 1234567"></div>
+                    <div class="form-group"><label>Email</label><input type="email" id="b-mail"></div>
+                </div>
+                <div id="guest-loaded-banner" style="display:none; background:#eafaf1; border:1px solid #27ae60; border-radius:5px; padding:8px 12px; margin-bottom:10px; font-size:0.88rem; color:#1e8449;">
+                    ✔ Dati caricati dalla Rubrica. Verificate e aggiornate se necessario.
+                </div>
+
+                <div class="form-grid" style="background:#f8f9fa; padding:10px; border-radius:5px;">
+                    <div class="form-group"><label>Indirizzo Residenza</label><input type="text" id="b-address" placeholder="Via, Città, CAP, Nazione"></div>
+                    <div class="form-group">
+                        <label>Tipo Documento</label>
+                        <select id="b-doc-type"><option>Carta Identità</option><option>Passaporto</option><option>Patente</option></select>
+                    </div>
+                    <div class="form-group"><label>Numero Documento</label><input type="text" id="b-doc-num"></div>
+                </div>
+
+                <div class="form-grid">
+                    <div class="form-group"><label>N. Adulti</label><input type="number" id="b-adults" value="1" min="1" required oninput="updatePreview()"></div>
+                    <div class="form-group"><label>N. Minori (<14)</label><input type="number" id="b-minors" value="0" min="0" required oninput="updatePreview()"></div>
+                    <div class="form-group"><label>Extra Forfettari (Lenzuola/Pulizie €)</label><input type="number" id="b-linen" value="0" oninput="updatePreview()"></div>
+                </div>
+                
+                <div class="form-group">
+                    <label>Note Interne</label>
+                    <textarea id="b-notes" rows="2" placeholder="Es. Richiesta culla, orario di arrivo stimato..."></textarea>
+                </div>
+
+                <div class="form-group" style="background: #fff3cd; padding: 15px; border-radius: 5px; border: 1px dashed #f39c12; margin-bottom: 1rem;">
+                    <label style="color: #d35400;">⚡ Forza Prezzo Manuale (€)</label>
+                    <p style="font-size:0.8rem; margin-top:0; color:#555;">Ignora le tariffe automatiche.</p>
+                    <div class="override-container" style="display:flex; gap:10px; align-items:center;">
+                        <input type="number" id="b-price-override" placeholder="Es. 450" oninput="updatePreview()" style="flex: 1;">
+                        <button type="button" class="btn" onclick="document.getElementById('b-price-override').value='';updatePreview();" style="margin:0; width:auto; background:#ecf0f1;">✕ Azzera</button>
+                    </div>
+                </div>
+
+                <div class="form-group" style="background: #e8f8f5; padding: 15px; border-radius: 5px; border: 1px dashed #27ae60; margin-bottom: 1rem;">
+                    <label style="color: #1e8449; border-bottom: 1px solid #c3e6cb; padding-bottom: 5px; margin-bottom: 10px; display:block;">💰 Registrazione Pagamenti (Soggiorno)</label>
+                    
+                    <div style="display:flex; gap:15px; margin-bottom: 10px; flex-wrap: wrap;">
+                        <div style="flex:1; min-width:140px;">
+                            <label style="font-size:0.8rem; color:#555;">Caparra (€)</label>
+                            <input type="number" id="b-deposit" placeholder="Es. 100" value="0" step="0.01" oninput="updatePreview()" style="width: 100%;">
+                        </div>
+                        <div style="flex:1; min-width:140px;">
+                            <label style="font-size:0.8rem; color:#555;">Metodo Caparra</label>
+                            <select id="b-deposit-method">
+                                <option value="">- Seleziona -</option>
+                                <option value="Bonifico">Bonifico</option>
+                                <option value="Contanti">Contanti</option>
+                                <option value="Carta/Pos">Carta/POS</option>
+                                <option value="Assegno">Assegno</option>
+                                <option value="Portale">Portale (Airbnb/Booking)</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div style="display:flex; gap:15px; flex-wrap: wrap;">
+                        <div style="flex:1; min-width:140px;">
+                            <label style="font-size:0.8rem; color:#555;">Saldo (€)</label>
+                            <input type="number" id="b-balance-paid" placeholder="Es. 400" value="0" step="0.01" oninput="updatePreview()" style="width: 100%;">
+                        </div>
+                        <div style="flex:1; min-width:140px;">
+                            <label style="font-size:0.8rem; color:#555;">Metodo Saldo</label>
+                            <select id="b-balance-method">
+                                <option value="">- Seleziona -</option>
+                                <option value="Bonifico">Bonifico</option>
+                                <option value="Contanti">Contanti</option>
+                                <option value="Carta/Pos">Carta/POS</option>
+                                <option value="Assegno">Assegno</option>
+                                <option value="Portale">Portale (Airbnb/Booking)</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="conflict-warning">⚠️ ATTENZIONE: Le date selezionate si sovrappongono con una prenotazione esistente in questo appartamento!</div>
+                <div id="past-dates-warning" style="display:none; color:#856404; background:#fff3cd; border:1px solid #f39c12; border-radius:4px; padding:6px 12px; margin-top:8px; font-size:0.88rem;">
+                    📅 Le date selezionate sono nel passato — stai inserendo una prenotazione storica?
+                </div>
+
+                <div id="preview-box">
+                    <h3 style="margin-top:0;">Anteprima Calcolo</h3>
+                    <div id="preview-content">Compila le date per vedere il calcolo...</div>
+                </div>
+
+                <div id="recalc-price-box" style="display:none; background:#fff8e1; border:1px solid #f39c12; border-radius:5px; padding:10px 14px; margin-bottom:12px;">
+                    <label style="font-weight:bold; color:#d35400; cursor:pointer; display:flex; align-items:center; gap:8px; margin:0;">
+                        <input type="checkbox" id="chk-recalc-price" style="width:auto; margin:0;">
+                        ⚡ Ricalcola prezzo automaticamente con le tariffe attuali
+                    </label>
+                    <small style="color:#888; margin-left:24px; display:block; margin-top:4px;">Se non spuntato, il prezzo originale viene mantenuto.</small>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button type="submit" class="btn btn-success" id="btn-save-booking">Salva Prenotazione</button>
+                    <button type="button" class="btn btn-danger" id="btn-cancel-edit" style="display:none;" onclick="cancelEdit()">Annulla Modifica</button>
+                </div>
+            </form>
+        </div>
+        
+        <div class="card">
+            <h2>Elenco Prenotazioni</h2>
+            <div style="text-align:right;margin-bottom:10px;display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;">
+                <button class="btn btn-success" onclick="exportBookingsCSV()">⬇ Esporta CSV</button>
+                <button class="btn" style="background:#8e44ad;color:white;" onclick="exportIcal()">📅 Esporta iCal</button>
+            </div>
+            <div class="booking-filters">
+                <div class="form-group">
+                    <label>Anno Check-in</label>
+                    <select id="filter-b-year" onchange="renderBookingList()"></select>
+                </div>
+                <div class="form-group">
+                    <label>Ricerca Globale</label>
+                    <input type="text" id="filter-b-name" placeholder="Nome, telefono, email, note..." oninput="renderBookingList()">
+                </div>
+                <div class="form-group">
+                    <label>Appartamento</label>
+                    <select id="filter-b-app" onchange="renderBookingList()"><option value="all">Tutti</option></select>
+                </div>
+                <div class="form-group">
+                    <label>Stato</label>
+                    <select id="filter-b-status" onchange="renderBookingList()">
+                        <option value="all">Tutti</option>
+                        <option value="confermata">Confermata</option>
+                        <option value="caparra">Caparra / Acconto ricevuto</option>
+                        <option value="saldo">Saldo completato</option>
+                        <option value="cancellata">Cancellata</option>
+                        <option value="da_saldare">🔴 Da saldare</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Mese Check-in</label>
+                    <input type="month" id="filter-b-month" onchange="renderBookingList()">
+                </div>
+                <div class="form-group" style="align-self:flex-end;">
+                    <button class="btn" style="background:#ecf0f1;margin-top:0;" onclick="clearBookingFilters()">✕ Azzera filtri</button>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table id="booking-list">
+                    <thead>
+                        <tr style="background:#eee;">
+                            <th>Stato</th><th>Canale</th><th>App.</th><th>Ospite</th><th>Periodo</th><th>Totale / Saldo</th><th>Azione</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="spese" class="tab-content">
+        <div class="card">
+            <h2>Registra Spesa</h2>
+            <form id="expense-form">
+                <div class="form-grid">
+                    <div class="form-group"><label>Data</label><input type="date" id="e-date" required></div>
+                    <div class="form-group"><label>Appartamento</label><select id="e-app"><option value="0">Generale</option></select></div>
+                    <div class="form-group">
+                        <label>Categoria</label>
+                        <select id="e-cat"><option>Elettricità</option><option>Gas/Acqua</option><option>Tasse/Condominio</option><option>Manutenzione</option><option>Altro</option></select>
+                    </div>
+                    <div class="form-group"><label>Importo (€)</label><input type="number" id="e-amount" step="0.01" required></div>
+                    <div class="form-group"><label>Descrizione</label><input type="text" id="e-desc"></div>
+                </div>
+                <button type="submit" class="btn btn-primary">Aggiungi Spesa</button>
+            </form>
+        </div>
+
+        <div class="card">
+            <h2>Lista Spese</h2>
+            <div class="form-grid" style="margin-bottom:15px;">
+                <div class="form-group">
+                    <label>Anno</label>
+                    <select id="filter-e-year" onchange="renderExpenseList()">
+                        <option value="all">Tutti gli anni</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Mese</label>
+                    <select id="filter-e-month" onchange="renderExpenseList()">
+                        <option value="all">Tutti i mesi</option>
+                        <option value="01">Gennaio</option>
+                        <option value="02">Febbraio</option>
+                        <option value="03">Marzo</option>
+                        <option value="04">Aprile</option>
+                        <option value="05">Maggio</option>
+                        <option value="06">Giugno</option>
+                        <option value="07">Luglio</option>
+                        <option value="08">Agosto</option>
+                        <option value="09">Settembre</option>
+                        <option value="10">Ottobre</option>
+                        <option value="11">Novembre</option>
+                        <option value="12">Dicembre</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>Filtra Appartamento</label>
+                    <select id="filter-e-app" onchange="renderExpenseList()"><option value="all">Tutti</option></select>
+                </div>
+                <div class="form-group">
+                    <label>Filtra Categoria</label>
+                    <select id="filter-e-cat" onchange="renderExpenseList()"><option value="all">Tutte</option><option>Elettricità</option><option>Gas/Acqua</option><option>Tasse/Condominio</option><option>Manutenzione</option><option>Altro</option></select>
+                </div>
+                <div class="form-group" style="align-self:flex-end;">
+                    <button class="btn" style="background:#ecf0f1;margin-top:0;width:100%;" onclick="resetExpenseFilters()">✕ Azzera filtri</button>
+                </div>
+            </div>
+            <div style="display:flex; justify-content:flex-end; margin-bottom:8px;">
+                <button class="btn" style="background:#27ae60;color:white;padding:6px 14px;font-size:0.85rem;" onclick="exportExpensesCSV()">⬇ Esporta CSV</button>
+            </div>
+            <div class="table-responsive">
+                <table id="expense-list">
+                    <thead>
+                        <tr style="background:#eee;">
+                            <th>Data</th><th>App.</th><th>Cat.</th><th>Descrizione</th><th>Importo</th><th>Azione</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                    <tfoot><tr style="font-weight:bold; background:#fdfdfd;"><td colspan="4" style="text-align:right;">TOTALE FILTRATO:</td><td id="e-total-filtered">€ 0.00</td><td></td></tr></tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="rubrica" class="tab-content">
+        <div class="card" style="border-left:5px solid #25D366;">
+            <h2 style="border-color:#25D366;">📱 WhatsApp Ricontatto Ospiti Anno Precedente</h2>
+            <p style="margin-top:0; color:#555; font-size:0.9rem;">
+                Seleziona l'anno precedente da cui estrarre gli ospiti, personalizza lo sconto e genera i messaggi pronti da inviare su WhatsApp.
+            </p>
+            <div class="form-grid" style="margin-bottom:15px;">
+                <div class="form-group" style="margin:0;">
+                    <label>Anno di riferimento ospiti</label>
+                    <select id="wa-year"></select>
+                </div>
+                <div class="form-group" style="margin:0;">
+                    <label>% Sconto da offrire</label>
+                    <input type="number" id="wa-sconto" min="0" max="50" value="10" style="max-width:120px;">
+                </div>
+                <div class="form-group" style="margin:0; align-self:flex-end;">
+                    <button class="btn" style="background:#25D366;color:white;width:100%;" onclick="buildRicontattoList()">
+                        🔍 Trova ospiti e genera messaggi
+                    </button>
+                </div>
+            </div>
+            <div id="wa-results"></div>
+        </div>
+
+        <div class="card">
+            <h2>👥 Rubrica Ospiti</h2>
+            <p style="margin-top:0; color:#888; font-size:0.88rem;">Gli ospiti vengono salvati automaticamente ad ogni prenotazione.</p>
+            <div class="rubrica-search">
+                <div class="form-group" style="margin:0; flex:1; min-width:200px;">
+                    <label>Cerca per cognome o nome</label>
+                    <input type="text" id="rubrica-search" placeholder="Es. Rossi..." oninput="renderRubrica()">
+                </div>
+                <div class="form-group" style="margin:0; align-self:flex-end;">
+                    <button class="btn" style="background:#ecf0f1;" onclick="document.getElementById('rubrica-search').value=''; renderRubrica();">✕ Azzera</button>
+                </div>
+            </div>
+            <div id="rubrica-stats" style="display:flex; gap:15px; flex-wrap:wrap; margin-bottom:15px;"></div>
+            <div id="rubrica-grid" class="guest-grid"></div>
+        </div>
+    </div>
+
+    <div id="report" class="tab-content">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px;">
+            <button onclick="generateAccountingPDF()" class="btn btn-primary" style="flex:1;min-width:200px;">📄 Esporta Riepilogo Contabile (PDF)</button>
+            <button onclick="openSeasonReport()" class="btn" style="flex:1;min-width:200px;background:#16a085;color:white;">📊 Report Fine Stagione</button>
+        </div>
+
+        <div class="report-filters card" style="padding:15px; margin-bottom:0;">
+            <div class="form-group" style="margin:0; min-width:120px;">
+                <label>Anno</label>
+                <select id="filter-report-year" onchange="calculateFinances()"></select>
+            </div>
+            <div class="form-group" style="margin:0; min-width:160px;">
+                <label>Appartamento</label>
+                <select id="filter-report-app" onchange="calculateFinances()"><option value="all">Tutti</option></select>
+            </div>
+            <small style="color:#888; align-self:center;">I totali e la tabella si aggiornano in base ai filtri selezionati.</small>
+        </div>
+
+        <div class="card" style="margin-top:15px;">
+<h2>Crediti da Incassare</h2><div id="credits-list"></div><h2 style="margin-top:20px;">Scadenzario Incassi (7 giorni)</h2><div id="upcoming-credits"></div>
+</div>
+<div class="stats-grid" style="margin-top:15px;">
+            <div class="stat-item stat-revenue"><h3>Entrate</h3><p id="total-revenue">€ 0.00</p></div>
+            <div class="stat-item stat-expenses"><h3>Spese</h3><p id="total-expenses">€ 0.00</p></div>
+            <div class="stat-item stat-net"><h3>Utile Netto</h3><p id="total-net">€ 0.00</p></div>
+            <div class="stat-item stat-tax"><h3>Tassa Soggiorno</h3><p id="total-tax-fund">€ 0.00</p></div>
+        </div>
+
+        <div class="card" style="margin-top:20px;">
+            <h2>Rendiconto Mensile Tassa Soggiorno</h2>
+            <p style="font-size:0.85rem; color:#888; margin-top:0;">⚠️ Versare tramite F24 entro il 10 del mese successivo a quello indicato.</p>
+            <input type="month" id="report-month" onchange="renderTaxReports()" style="margin-bottom:10px; max-width:200px;">
+            <div class="table-responsive" id="monthly-tax-report"></div>
+        </div>
+    </div>
+
+    <div id="season-report-modal" class="modal-overlay" onclick="if(event.target===this)closeModal('season-report-modal')">
+        <div class="modal-box" style="max-width:700px;">
+            <h3 style="border-left:4px solid var(--accent);padding-left:10px;">📊 Report Fine Stagione</h3>
+            <div id="season-report-content" style="font-size:0.9rem;"></div>
+            <div style="margin-top:15px;">
+                <button class="btn btn-primary" onclick="exportSeasonReportPDF()">📄 Esporta PDF</button>
+                <button class="btn btn-danger" onclick="closeModal('season-report-modal')" style="margin-left:8px;">Chiudi</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="impostazioni" class="tab-content">
+        <div class="card">
+            <h2>Impostazioni</h2>
+            
+            <div class="settings-section">
+                <h3>1. Costi e Localizzazione</h3>
+                <div class="form-grid">
+                    <div class="form-group"><label>Tassa (€ pers/notte)</label><input type="number" id="set-tax-rate" step="0.10"></div>
+                    <div class="form-group"><label>Max Notti Tassa</label><input type="number" id="set-tax-max" value="10"></div>
+                    <div class="form-group"><label>Lenzuola Base (€)</label><input type="number" id="set-linen-price"></div>
+                </div>
+                <div class="form-group">
+                    <label>Link Posizione Google Maps (per WhatsApp)</label>
+                    <input type="text" id="set-maps-link" placeholder="https://maps.google.com/?q=Indirizzo">
+                </div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>📅 Inizio Stagione (gg-mm)</label>
+                        <input type="text" id="set-season-start" placeholder="Es. 06-01" maxlength="5">
+                    </div>
+                    <div class="form-group">
+                        <label>📅 Fine Stagione (gg-mm)</label>
+                        <input type="text" id="set-season-end" placeholder="Es. 09-30" maxlength="5">
+                    </div>
+                </div>
+                <small style="color:#888; display:block; margin-bottom:10px;">Le date di stagione determinano il calcolo del tasso di occupazione e il grafico entrate.</small>
+
+                <button class="btn btn-primary" onclick="saveSettings()">Salva Impostazioni</button>
+            </div>
+
+            <div class="settings-section">
+                <h3>2. Anagrafica Appartamenti</h3>
+                <div class="table-responsive">
+                    <table id="settings-apps-table">
+                        <thead><tr><th>ID</th><th>Nome</th><th>Posti</th><th>Note/Descrizione</th><th>Azione</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <button class="btn btn-success" onclick="addAppRow()">+ Aggiungi</button>
+                <button class="btn btn-primary" onclick="saveApps()">Salva</button>
+            </div>
+
+            <div class="settings-section">
+                <h3>3. Tariffe</h3>
+                <div class="table-responsive">
+                    <table id="settings-rates-table">
+                        <thead><tr><th>Nome Tariffa</th><th>Appartamento</th><th>Inizio</th><th>Fine</th><th>€/Giorno</th><th>€/Settimana</th><th>Azione</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+                <button class="btn btn-success" onclick="addRateRow()">+ Aggiungi</button>
+                <button class="btn btn-primary" onclick="saveRates()">Salva</button>
+            </div>
+
+            <div class="settings-section" style="border:1px solid #25D366;">
+                <h3>4. 📱 Messaggi WhatsApp Ricontatto</h3>
+                <p style="font-size:0.85rem;color:#666;margin-top:0;">Impostazioni usate per il messaggio di ricontatto ospiti dell'anno precedente.</p>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Firma (es. Maria Grazia e Rosanna)</label>
+                        <input type="text" id="set-firma" placeholder="Maria Grazia e Rosanna">
+                    </div>
+                    <div class="form-group">
+                        <label>% Sconto per ospiti abituali</label>
+                        <input type="number" id="set-sconto" min="0" max="50" value="10" placeholder="Es. 10">
+                    </div>
+                </div>
+                <button class="btn btn-primary" onclick="saveMessaggiSettings()">Salva</button>
+            </div>
+
+            <div class="settings-section" style="background-color: #f8f9fa; border: 1px solid #3498db;">
+                <h3>5. Gestione Dati (Backup & Ripristino)</h3>
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button class="btn btn-primary" onclick="backupData()">⬇ Esporta Backup</button>
+                    <div>
+                        <label for="import-file" class="btn btn-success" style="cursor:pointer; margin-top:10px;">⬆ Importa Backup</label>
+                        <input type="file" id="import-file" style="display:none;" onchange="restoreData(event)">
+                    </div>
+                    <button class="btn btn-warning" onclick="restoreEmergencyBackup()" id="btn-emergency-restore" style="margin-top:10px;">🆘 Ripristina Backup di Emergenza</button>
+                </div>
+                <div id="emergency-backup-info" style="margin-top:10px; font-size:0.82rem; color:#888;"></div>
+            </div>
+            
+            <div class="settings-section" style="border: 1px solid #e74c3c;">
+                <h3 style="color: #e74c3c;">6. Zona Pericolosa (Reset Fabbrica)</h3>
+                <p style="font-size:0.85rem;color:#666;margin-top:0;">Cancella tutto il database: prenotazioni, rubrica, spese e impostazioni torneranno come nuovi.</p>
+                <button class="btn btn-danger" onclick="factoryReset()">⚠️ Cancella Tutti i Dati</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="detail-modal" class="modal-overlay" onclick="if(event.target===this)closeModal('detail-modal')">
+    <div class="modal-box">
+        <h3>Dettaglio Prenotazione <span id="md-id-display" style="color:#7f8c8d; font-size:1rem; margin-left:auto;"></span></h3>
+        <div id="md-content" style="font-size:0.95rem; line-height:1.6; margin-bottom:15px; background:#f8f9fa; padding:15px; border-radius:5px;"></div>
+        
+        <div class="form-group">
+            <label>Aggiorna Stato</label>
+            <select id="md-status">
+                <option value="confermata">Confermata</option>
+                <option value="caparra">Caparra / Acconto ricevuto</option>
+                <option value="saldo">Saldo completato</option>
+                <option value="cancellata">Cancellata</option>
+            </select>
+        </div>
+        
+        <input type="hidden" id="md-id">
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <button class="btn btn-primary" onclick="updateBookingStatus()">Aggiorna Stato</button>
+            <button class="btn btn-whatsapp" onclick="sendPaymentWa()">📱 Ricevuta Pagamento WA</button>
+            <button class="btn btn-warning" onclick="openFullEditFromModal()">✏️ Modifica</button>
+            <button class="btn" style="background:#8e44ad;color:white;" onclick="duplicateFromModal()">📋 Duplica</button>
+            <button class="btn btn-success" onclick="generateReceiptPDF()" id="btn-gen-receipt">📄 Ricevuta PDF</button>
+            <button class="btn btn-danger" onclick="closeModal('detail-modal')">Chiudi</button>
+        </div>
+    </div>
+</div>
+
+<div id="wa-preview-modal" class="modal-overlay" onclick="if(event.target===this)closeModal('wa-preview-modal')">
+    <div class="modal-box" style="max-width: 540px;">
+        <h3 style="margin-top:0; color:var(--primary); border-left:4px solid var(--whatsapp); padding-left:10px;">📱 Anteprima Messaggio</h3>
+        <div id="wa-preview-guest" style="font-size:0.85rem;color:#888;margin-bottom:10px;"></div>
+        <textarea id="wa-preview-text" rows="18" style="width:100%;font-size:0.9rem;line-height:1.5;border:1px solid #ddd;border-radius:6px;padding:10px;resize:vertical;"></textarea>
+        <div style="display:flex;gap:10px;margin-top:15px;flex-wrap:wrap;">
+            <button id="wa-preview-send-btn" class="btn btn-whatsapp" style="flex:2; margin-top:0;" onclick="sendWaFromPreview()">📱 Apri WhatsApp</button>
+            <button onclick="copyWaPreview()" class="btn" style="background:#ecf0f1; color:var(--dark); flex:1; margin-top:0;">📋 Copia</button>
+            <button onclick="closeModal('wa-preview-modal')" class="btn btn-danger" style="flex:1; margin-top:0;">Chiudi</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ── NAMESPACE chiavi localStorage ─────────────────────────────
+    const LS = { apps:'pms50_apps', rates:'pms50_rates', settings:'pms50_settings', bookings:'pms50_bookings', expenses:'pms50_expenses', lastBackup:'pms50_lastBackup', guests:'pms50_guests', emergencyBackup:'pms50_emergency', saveCount:'pms50_saveCount', dbFingerprint:'pms50_dbfp', bookingLog:'pms50_log' };
+    
+    const defaultApps = [{id:1, name:"Appartamento 1", beds:4, notes:""},{id:2, name:"Appartamento 2", beds:2, notes:""},{id:3, name:"Appartamento 3", beds:6, notes:""},{id:4, name:"Appartamento 4", beds:4, notes:""},{id:5, name:"Appartamento 5", beds:3, notes:""}];
+    const currentYear = new Date().getFullYear();
+    const defaultRates = [{id:1, appId:0, name:"Giugno", start:`${currentYear}-06-01`, end:`${currentYear}-06-30`, daily:80, weekly:500}];
+    const defaultSettings = {taxRate:2.0, maxTaxNights:10, linenPrice:15.0, mapsLink:"", firma:"", sconto:10};
+
+    let apps = JSON.parse(localStorage.getItem(LS.apps)) || defaultApps;
+    let rates = JSON.parse(localStorage.getItem(LS.rates)) || defaultRates;
+    let settings = JSON.parse(localStorage.getItem(LS.settings)) || defaultSettings;
+    if(settings.maxTaxNights === undefined) settings.maxTaxNights = 10;
+    if(settings.mapsLink    === undefined) settings.mapsLink    = "";
+    if(settings.firma       === undefined) settings.firma       = "";
+    if(settings.sconto      === undefined) settings.sconto      = 10;
+    if(settings.seasonStart  === undefined) settings.seasonStart  = "06-01";
+    if(settings.seasonEnd    === undefined) settings.seasonEnd    = "09-30";
+    
+    let bookings = JSON.parse(localStorage.getItem(LS.bookings)) || [];
+    let expenses = JSON.parse(localStorage.getItem(LS.expenses)) || [];
+    let guests   = JSON.parse(localStorage.getItem(LS.guests))   || {};
+
+    let editingBookingId = null;
+    let isPopulatingForm = false; // sopprime updatePreview durante il popolamento
+    let myCharts = {};
+    
+    // VARIABILE PER CONTROLLARE SE CI SONO STATE MODIFICHE
+    let needsBackup = false;
+    let isBackingUp = false; // Nuova variabile per prevenire doppi click/doppi download
+    
+    // ── FUNZIONI UTILITY ──────────────────────────────────────────
+    function escHtml(str) {
+        if(!str) return '';
+        return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    let toastTimer;
+    function showToast(msg, type='success') {
+        const t = document.getElementById('toast');
+        t.textContent = msg;
+        t.className = type;
+        t.style.opacity = '1';
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => { t.style.opacity = '0'; }, 2500);
+    }
+    
+    // GESTIONE FLAG BACKUP E AVVISI
+    let saveCounter = parseInt(localStorage.getItem(LS.saveCount) || '0');
+
+    function markAsModified() {
+        needsBackup = true;
+        saveCounter++;
+        localStorage.setItem(LS.saveCount, saveCounter);
+        // Aggiorna fingerprint: conta prenotazioni e spese
+        localStorage.setItem(LS.dbFingerprint, JSON.stringify({
+            bookings: bookings.length,
+            expenses: expenses.length,
+            guests:   Object.keys(guests).length,
+            ts:       Date.now()
+        }));
+        // Ogni 5 modifiche: salva snapshot di emergenza automatica
+        if (saveCounter % 5 === 0) {
+            saveEmergencyBackup();
+        }
+    }
+
+    function saveEmergencyBackup() {
+        try {
+            const snap = JSON.stringify({
+                apps, rates, settings, bookings, expenses, guests,
+                _savedAt: new Date().toISOString(),
+                _saveCount: saveCounter
+            });
+            localStorage.setItem(LS.emergencyBackup, snap);
+            console.log(`[PMS] Emergency backup salvato (modifica #${saveCounter})`);
+        } catch(e) {
+            console.warn('[PMS] Emergency backup fallito:', e);
+        }
+    }
+
+    let bookingLog = {};
+    try { bookingLog = JSON.parse(localStorage.getItem(LS.bookingLog) || '{}'); } catch(e) {}
+
+    function logBookingChange(bookingId, action, details) {
+        if (!bookingLog[bookingId]) bookingLog[bookingId] = [];
+        bookingLog[bookingId].push({
+            ts: new Date().toISOString(),
+            action,
+            details
+        });
+        // Mantieni max 10 voci per prenotazione
+        if (bookingLog[bookingId].length > 10) bookingLog[bookingId].shift();
+        try { localStorage.setItem(LS.bookingLog, JSON.stringify(bookingLog)); } catch(e) {}
+    }
+
+    function getBookingLog(bookingId) {
+        return (bookingLog[bookingId] || []).slice().reverse(); // più recenti prima
+    }
+
+    function restoreEmergencyBackup() {
+        const snap = localStorage.getItem(LS.emergencyBackup);
+        if (!snap) { alert('Nessun backup di emergenza disponibile.'); return; }
+        try {
+            const data = JSON.parse(snap);
+            const when = data._savedAt ? new Date(data._savedAt).toLocaleString('it-IT') : 'data sconosciuta';
+            if (!confirm(`Ripristinare il backup di emergenza del ${when}? I dati attuali verranno sovrascritti.`)) return;
+            localStorage.setItem(LS.apps,      JSON.stringify(data.apps));
+            localStorage.setItem(LS.bookings,  JSON.stringify(data.bookings));
+            if (data.rates)    localStorage.setItem(LS.rates,    JSON.stringify(data.rates));
+            if (data.settings) localStorage.setItem(LS.settings, JSON.stringify(data.settings));
+            if (data.expenses) localStorage.setItem(LS.expenses, JSON.stringify(data.expenses));
+            if (data.guests)   localStorage.setItem(LS.guests,   JSON.stringify(data.guests));
+            showToast('Backup di emergenza ripristinato!');
+            setTimeout(() => location.reload(), 800);
+        } catch(e) {
+            alert('Backup di emergenza corrotto o non leggibile.');
+        }
+    }
+    
+    // EVENTO CHIUSURA BROWSER
+    const beforeUnloadHandler = function (e) {
+        if (needsBackup) {
+            // Se ci sono modifiche, invoca la finestra di dialogo del browser nativa
+            e.preventDefault();
+            e.returnValue = ''; // Obbligatorio in Chrome/Edge per mostrare l'avviso
+        }
+    };
+    window.addEventListener('beforeunload', beforeUnloadHandler);
+
+    // NUOVA FUNZIONE: Chiusura sicura con salvataggio (Re-inserita completa per sicurezza)
+    async function safeExit() {
+        if (needsBackup) {
+            if (confirm("Hai effettuato delle modifiche. Vuoi scaricare il file di backup aggiornato prima di uscire?")) {
+                await backupData();
+            }
+        } else {
+            alert("Nessuna modifica pendente. I tuoi dati sono già al sicuro.");
+        }
+        
+        // Rimuoviamo il blocco di Chrome sulla chiusura
+        window.removeEventListener('beforeunload', beforeUnloadHandler);
+        needsBackup = false; 
+    }
+
+    // Funzione per impostare date di default nei form (Oggi/Domani)
+    function setDefaultDates() {
+        const today = new Date();
+        const tomorrow = new Date(today);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        
+        const formatYMD = (date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+        
+        const elStart = document.getElementById('b-start');
+        const elEnd = document.getElementById('b-end');
+        const elExpenseDate = document.getElementById('e-date');
+        
+        if (elStart && !elStart.value) elStart.value = formatYMD(today);
+        if (elEnd && !elEnd.value) elEnd.value = formatYMD(tomorrow);
+        if (elExpenseDate && !elExpenseDate.value) elExpenseDate.value = formatYMD(today);
+    }
+
+    // ── NUOVA FUNZIONE: MOVIMENTI DI OGGI ──────────────────────────
+    function renderTodayMovements() {
+        const today = new Date();
+        const yyyy = today.getFullYear();
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        const dd = String(today.getDate()).padStart(2, '0');
+        const todayStr = `${yyyy}-${mm}-${dd}`;
+        
+        document.getElementById('today-date-display').innerText = `${dd}/${mm}/${yyyy}`;
+
+        const validBookings = bookings.filter(b => b.status !== 'cancellata');
+        
+        // Filtra Arrivi, Partenze e Pernottanti odierni
+        const arrivals = validBookings.filter(b => b.start === todayStr);
+        const departures = validBookings.filter(b => b.end === todayStr);
+        const staying = validBookings.filter(b => b.start < todayStr && b.end > todayStr);
+
+        const listEl = document.getElementById('today-movements-list');
+        let html = '';
+
+        if (arrivals.length === 0 && departures.length === 0 && staying.length === 0) {
+            html = '<p style="color: #7f8c8d; font-style: italic; margin: 0;">Nessun movimento previsto per oggi.</p>';
+        } else {
+            html += '<ul style="list-style-type: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px;">';
+            
+            // Renderizza gli arrivi
+            arrivals.forEach(b => {
+                const app = apps.find(a => a.id === b.appId);
+                const due=((parseFloat(b.totalPrice)||0)-((parseFloat(b.deposit)||0)+(parseFloat(b.balancePaid)||0)));
+                let alerts='';
+                if(due>0) alerts += `<div style="color:#c0392b;font-weight:bold;">🔴 Saldo residuo € ${due.toFixed(2)}</div>`;
+                if(!b.docNum) alerts += `<div style="color:#d68910;">🟠 Documento mancante</div>`;
+                if(!b.tel) alerts += `<div style="color:#b7950b;">🟡 Telefono mancante</div>`;
+                if(!alerts) alerts = `<div style="color:#27ae60;">🟢 Dati completi</div>`;
+                html += `
+                <li style="background: #e8f8f5; padding: 10px; border-radius: 5px; border-left: 4px solid var(--success); display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="openBookingModal(${b.id})">
+                    <div>
+                        <strong style="color: var(--success);">🛬 ARRIVO:</strong> ${escHtml(b.surname)} ${escHtml(b.name)} 
+                    <div>${alerts}</div></div>
+                    <span style="color: #555; font-size: 0.9rem; font-weight: bold;">${app ? escHtml(app.name) : 'N/D'}</span>
+                </li>`;
+            });
+
+            // Renderizza i pernottanti (in corso)
+            staying.forEach(b => {
+                const app = apps.find(a => a.id === b.appId);
+                html += `
+                <li style="background: #eaf2f8; padding: 10px; border-radius: 5px; border-left: 4px solid var(--accent); display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="openBookingModal(${b.id})">
+                    <div>
+                        <strong style="color: var(--accent);">🌙 IN CORSO:</strong> ${escHtml(b.surname)} ${escHtml(b.name)} 
+                    </div>
+                    <span style="color: #555; font-size: 0.9rem; font-weight: bold;">${app ? escHtml(app.name) : 'N/D'}</span>
+                </li>`;
+            });
+
+            // Renderizza le partenze
+            departures.forEach(b => {
+                const app = apps.find(a => a.id === b.appId);
+                html += `
+                <li style="background: #fdedec; padding: 10px; border-radius: 5px; border-left: 4px solid var(--danger); display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="openBookingModal(${b.id})">
+                    <div>
+                        <strong style="color: var(--danger);">🛫 PARTENZA:</strong> ${escHtml(b.surname)} ${escHtml(b.name)} 
+                    </div>
+                    <span style="color: #555; font-size: 0.9rem; font-weight: bold;">${app ? escHtml(app.name) : 'N/D'}</span>
+                </li>`;
+            });
+
+            html += '</ul>';
+        }
+        
+        listEl.innerHTML = html;
+    }
+
+    // ── LOGICA CORE RESTANTE ───────────────────────────────────────
+    function checkBackupReminder() {
+        const last = localStorage.getItem(LS.lastBackup);
+        if(!last) { document.getElementById('backup-reminder').style.display='block'; return; }
+        const days = (Date.now() - parseInt(last)) / 86400000;
+        if(days > 7) document.getElementById('backup-reminder').style.display='block';
+    }
+
+    function showTab(tabId) {
+        document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+        document.getElementById(tabId).classList.add('active');
+        document.getElementById('btn-' + tabId)?.classList.add('active');
+        if(tabId === 'dashboard') { renderGantt(); updateDashboardCharts(); renderTodayMovements(); }
+        if(tabId === 'report') { populateReportFilters(); calculateFinances(); renderCreditsList(); renderUpcomingCredits(); }
+        if(tabId === 'spese') renderExpenseList();
+        if(tabId === 'rubrica') { populateWaYears(); renderRubrica(); }
+        if(tabId === 'impostazioni') renderSettings();
+    }
+
+    function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+    function formatIT(dateStr) { if(!dateStr) return '—'; const [y, m, d] = dateStr.split('-'); return `${d}/${m}/${y}`; }
+
+    function calculateTax(start, end, adults, minors) {
+        // I minori di 14 anni sono esenti dalla tassa di soggiorno (DL 23/2011)
+        // Usa solo il numero di adulti per il calcolo
+        const nights = Math.ceil((new Date(end) - new Date(start)) / 86400000);
+        const taxablePersons = parseInt(adults) || 0; // minori esclusi
+        return Math.min(nights, settings.maxTaxNights) * taxablePersons * settings.taxRate;
+    }
+
+    // Helper: trova tariffa applicabile per una data
+    function findRateForDate(dateStr, targetAppId) {
+        const valid = rates.filter(r => dateStr >= r.start && dateStr <= r.end);
+        return valid.find(r => parseInt(r.appId) === parseInt(targetAppId))
+            || valid.find(r => parseInt(r.appId) === 0 || isNaN(r.appId))
+            || null;
+    }
+
+    // Helper: calcola prezzo da n notti con una tariffa
+    // Pro-Rata con Smart Capping indipendente per blocco
+    // n     = numero di notti del blocco
+    // r     = tariffa applicabile ({ daily, weekly })
+    // Regola:
+    //   1. Calcola settimane intere + giorni extra
+    //   2. Giorni extra: applica daily; se supera weekly → cap a weekly
+    //   3. Capping globale blocco: se totale > ceil(n/7)*weekly → cap
+    //      (es. 5 notti a €80/g cap €400/sett = 400, non 400+80)
+    function calcNightsWithRate(n, r) {
+        const wp = r.weekly || 0;
+        const dp = r.daily  || 0;
+        if (n <= 0) return { price: 0, fullWeeks: 0, extraDays: 0, weeklyPrice: wp, dailyPrice: dp, capped: false };
+
+        const fullWeeks = Math.floor(n / 7);
+        const extraDays = n % 7;
+
+        // Costo settimane intere
+        const weeksCost = fullWeeks * wp;
+
+        // Costo giorni extra con Smart Capping
+        let extraCost = extraDays * dp;
+        let cappedExtra = false;
+        if (wp > 0 && extraCost > wp) {
+            extraCost  = wp;   // i giorni extra non possono costare più di una settimana
+            cappedExtra = true;
+        }
+
+        let total = weeksCost + extraCost;
+
+        // Smart Capping globale del blocco:
+        // n giorni non possono costare più di ceil(n/7) settimane intere
+        let cappedGlobal = false;
+        if (wp > 0) {
+            const maxCost = Math.ceil(n / 7) * wp;
+            if (total > maxCost) {
+                total       = maxCost;
+                cappedGlobal = true;
+            }
+        }
+
+        return {
+            price:      total,
+            fullWeeks,
+            extraDays,
+            weeklyPrice: wp,
+            dailyPrice:  dp,
+            capped:     cappedExtra || cappedGlobal,
+            cappedExtra,
+            cappedGlobal
+        };
+    }
+
+    // Restituisce { price, uncoveredNights, breakdown, rateUsed }
+    // Pro-Rata con Smart Capping: ogni notte calcolata con la propria tariffa di periodo
+    function autoPrice(start, end, targetAppId) {
+        if(!rates || rates.length === 0) return { price: 0, uncoveredNights: 0, breakdown: [], rateUsed: null };
+        const d1 = new Date(start); const d2 = new Date(end);
+        const totalNights = Math.round((d2 - d1) / 86400000);
+        if (totalNights <= 0) return { price: 0, uncoveredNights: 0, breakdown: [], rateUsed: null };
+
+        const nightsPerRate = {};
+        let uncoveredNights = 0;
+        for (let i = 0; i < totalNights; i++) {
+            const d = new Date(d1.getTime() + i * 86400000);
+            const ds = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+            const r = findRateForDate(ds, targetAppId);
+            if (!r) { uncoveredNights++; continue; }
+            if (!nightsPerRate[r.id]) nightsPerRate[r.id] = { rate: r, count: 0 };
+            nightsPerRate[r.id].count++;
+        }
+
+        let price = 0;
+        const breakdown = [];
+        for (const key in nightsPerRate) {
+            const { rate: r, count: n } = nightsPerRate[key];
+            const c = calcNightsWithRate(n, r);
+            price += c.price;
+            breakdown.push({
+                name:         r.name,
+                nights:       n,
+                fullWeeks:    c.fullWeeks,
+                extraDays:    c.extraDays,
+                dailyPrice:   c.dailyPrice,
+                weeklyPrice:  c.weeklyPrice,
+                subtotal:     c.price,
+                capped:       c.capped,
+                cappedExtra:  c.cappedExtra,
+                cappedGlobal: c.cappedGlobal
+            });
+        }
+        const firstRate = breakdown.length ? rates.find(r => r.name === breakdown[0].name) : null;
+        return { price, uncoveredNights, breakdown, rateUsed: firstRate };
+    }
+
+    // Wrapper retrocompatibile
+    function autoPriceValue(start, end, targetAppId) {
+        return autoPrice(start, end, targetAppId).price;
+    }
+
+    function checkConflicts(appId, start, end, excludeId = null) {
+        if(!start || !end) return false;
+        return bookings.some(b => {
+            if(b.status === 'cancellata') return false; 
+            if(excludeId && b.id === excludeId) return false; 
+            if(b.appId !== parseInt(appId)) return false;
+            return (start < b.end && end > b.start); 
+        });
+    }
+
+    function updatePreview() {
+        if (isPopulatingForm) return; // in fase di popolamento, non controllare
+        const start = document.getElementById('b-start').value;
+        const end = document.getElementById('b-end').value;
+        const appId = document.getElementById('b-app').value;
+        const pBox = document.getElementById('preview-box');
+        const pContent = document.getElementById('preview-content');
+        const wBox = document.getElementById('conflict-warning');
+        const btnSave = document.getElementById('btn-save-booking');
+        
+        if(checkConflicts(appId, start, end, editingBookingId)) {
+            wBox.style.display = 'block'; btnSave.disabled = true; pBox.style.display = 'none'; return;
+        } else {
+            wBox.style.display = 'none'; btnSave.disabled = false;
+        }
+        // Avviso non bloccante per date nel passato
+        const pastWarn = document.getElementById('past-dates-warning');
+        if (pastWarn) {
+            const today = new Date(); today.setHours(0,0,0,0);
+            const endDate = end ? new Date(end) : null;
+            if (endDate && endDate < today) {
+                pastWarn.style.display = 'block';
+            } else {
+                pastWarn.style.display = 'none';
+            }
+        }
+
+        if(start && end && start < end) {
+            const nights = Math.ceil((new Date(end) - new Date(start)) / 86400000);
+            document.getElementById('nights-counter').innerText = `(${nights} notti)`;
+            const adults = parseInt(document.getElementById('b-adults').value) || 0;
+            const linen = parseFloat(document.getElementById('b-linen').value) || 0;
+            const over = document.getElementById('b-price-override').value;
+            const deposit = parseFloat(document.getElementById('b-deposit').value) || 0;
+            const balancePaid = parseFloat(document.getElementById('b-balance-paid').value) || 0;
+
+            let stayPrice, breakdownHtml = '', uncoveredWarn = '';
+            if (over) {
+                stayPrice = parseFloat(over);
+            } else {
+                const result = autoPrice(start, end, appId);
+                stayPrice = result.price;
+                // Avviso giorni non coperti
+                if (result.uncoveredNights > 0) {
+                    uncoveredWarn = result.rateUsed
+                        ? `<div style="background:#fff3cd;border:1px solid #f39c12;border-radius:4px;padding:6px 10px;margin:6px 0;font-size:0.85rem;">
+                            ⚠️ <b>${result.uncoveredNights}</b> nott${result.uncoveredNights===1?'e':'i'} senza tariffa (escluse dal calcolo).
+                           </div>`
+                        : `<div style="background:#fdecea;border:1px solid #e74c3c;border-radius:4px;padding:6px 10px;margin:6px 0;font-size:0.85rem;">
+                            ❌ Nessuna tariffa per questo periodo. Definisci le tariffe in Impostazioni o usa il prezzo manuale.
+                           </div>`;
+                }
+                // Mostra la tariffa applicata (sempre una sola — regola OTA)
+                if (result.breakdown.length >= 1) {
+                    const b = result.breakdown[0];
+                    let detail = '';
+                    if (b.fullWeeks > 0 && b.extraDays > 0)
+                        detail = `${b.fullWeeks} sett. × €${b.weeklyPrice} + ${b.extraDays}gg × €${b.dailyPrice}`;
+                    else if (b.fullWeeks > 0)
+                        detail = `${b.fullWeeks} sett. × €${b.weeklyPrice}`;
+                    else
+                        detail = `${b.extraDays}gg × €${b.dailyPrice}`;
+                    if (b.capped) detail += ` <span style="color:#e67e22;font-size:0.78rem;">→ cap €${b.subtotal.toFixed(2)}</span>`;
+
+
+
+                    const crossNote = ''; // Pro-Rata: ogni periodo già calcolato separatamente
+
+                    // Dettaglio multi-blocco Pro-Rata
+                    let blockDetails = '';
+                    if (result.breakdown.length > 1) {
+                        blockDetails = result.breakdown.map(bk => {
+                            let bd = '';
+                            if (bk.fullWeeks > 0 && bk.extraDays > 0)
+                                bd = `${bk.fullWeeks}sett×€${bk.weeklyPrice}+${bk.extraDays}gg×€${bk.dailyPrice}`;
+                            else if (bk.fullWeeks > 0)
+                                bd = `${bk.fullWeeks}sett×€${bk.weeklyPrice}`;
+                            else
+                                bd = `${bk.extraDays}gg×€${bk.dailyPrice}`;
+                            const capNote = bk.capped ? ` <span style="color:#e67e22;">→cap €${bk.subtotal.toFixed(2)}</span>` : '';
+                            return `• <b>${bk.name}</b> (${bk.nights}n): ${bd}${capNote} = <b>€${bk.subtotal.toFixed(2)}</b>`;
+                        }).join('<br>');
+                    }
+                    breakdownHtml = `<div style="font-size:0.82rem;color:#555;margin:2px 0 6px 0;">
+                        ${result.breakdown.length > 1
+                            ? '<b>Dettaglio per periodo (Pro-Rata):</b><br>' + blockDetails
+                            : 'Tariffa: <b>' + b.name + '</b> (' + detail + ')'}${crossNote}</div>`;
+                }
+            }
+
+            const minors = parseInt(document.getElementById('b-minors').value) || 0;
+            const tax = calculateTax(start, end, adults, minors);
+            const tot = stayPrice + linen;
+            const totPaid = deposit + balancePaid;
+            const balance = tot - totPaid;
+
+            pBox.style.display = 'block';
+            pContent.innerHTML = `
+                ${uncoveredWarn}
+                <b>Notti:</b> ${nights} <br>
+                <b>Costo Soggiorno${over ? ' (FORZATO)' : ''}:</b> € ${stayPrice.toFixed(2)} <br>
+                ${breakdownHtml}
+                <b>Extra (Lenzuola/Pulizie):</b> € ${linen.toFixed(2)} <br>
+                <b>Totale Soggiorno:</b> € ${tot.toFixed(2)} <br>
+                <hr style="border-top:1px solid #bce8f1; margin: 8px 0;">
+                ${deposit > 0 ? `<span style="color:var(--status-caparra)">Caparra Versata: € ${deposit.toFixed(2)}</span><br>` : ''}
+                ${balancePaid > 0 ? `<span style="color:var(--status-saldo)">Saldo Versato: € ${balancePaid.toFixed(2)}</span><br>` : ''}
+                ${totPaid > 0 ? `<b>Totale Ricevuto: € ${totPaid.toFixed(2)}</b><br>` : ''}
+                <span style="color:${balance > 0 ? 'var(--danger)' : 'var(--success)'}; font-weight:bold; font-size:1.1rem; display:block; margin-top:5px;">
+                    ${balance > 0 ? 'Da Saldare' : 'Saldato interamente'}: € ${Math.max(0, balance).toFixed(2)}
+                </span>
+                <div style="margin-top:6px; font-size:0.82rem; color:#666; background:#f0f4f8; padding:5px 10px; border-radius:4px;">
+                    🏷️ Stato che verrà assegnato: <b>${(() => {
+                        const st = calcAutoStatus(tot, deposit, balancePaid, 'confermata');
+                        return {'confermata':'Confermata','caparra':'Caparra / Acconto ricevuto','saldo':'Saldo completato'}[st] || st;
+                    })()}</b>
+                </div>
+                <hr style="border-top:1px solid #bce8f1; margin: 8px 0;">
+                <small><b>Tassa di Soggiorno (solo adulti, esclusa):</b> € ${tax.toFixed(2)}${minors > 0 ? ' <i>('+minors+' minor'+(minors===1?'e':'i')+' esent'+(minors===1?'e':'i')+')</i>' : ''}</small>
+            `;
+        } else {
+            pBox.style.display = 'none';
+            document.getElementById('nights-counter').innerText = '';
+            // Nascondi anche i warning se le date sono incomplete
+            const _cw3 = document.getElementById('conflict-warning');
+            const _pw3 = document.getElementById('past-dates-warning');
+            const _bs3 = document.getElementById('btn-save-booking');
+            if (_cw3) _cw3.style.display = 'none';
+            if (_pw3) _pw3.style.display = 'none';
+            if (_bs3) _bs3.disabled = false;
+        }
+    }
+
+    function editBooking(id) {
+        const b = bookings.find(x => x.id === id); if(!b) return;
+        isPopulatingForm = true; // blocca updatePreview durante il popolamento
+        editingBookingId = id;
+        document.getElementById('b-app').value = b.appId;
+        document.getElementById('b-start').value = b.start;
+        document.getElementById('b-end').value = b.end;
+        document.getElementById('b-status').value = b.status || 'confermata';
+        document.getElementById('b-channel').value = b.channel || 'Diretto';
+        document.getElementById('b-surname').value = b.surname;
+        document.getElementById('b-name').value = b.name;
+        document.getElementById('b-tel').value = b.tel || '';
+        document.getElementById('b-mail').value = b.mail || '';
+        document.getElementById('b-address').value = b.address || '';
+        document.getElementById('b-doc-type').value = b.docType || 'Carta Identità';
+        document.getElementById('b-doc-num').value = b.docNum || '';
+        document.getElementById('b-adults').value = b.adults;
+        document.getElementById('b-minors').value = b.minors;
+        document.getElementById('b-linen').value = b.linen || 0;
+        document.getElementById('b-notes').value = b.notes || '';
+        document.getElementById('b-price-override').value = b.override !== null ? b.override : '';
+        document.getElementById('b-deposit').value = b.deposit || 0;
+        document.getElementById('b-deposit-method').value = b.depositMethod || '';
+        document.getElementById('b-balance-paid').value = b.balancePaid || 0;
+        document.getElementById('b-balance-method').value = b.balanceMethod || '';
+        
+        document.getElementById('form-title').innerText = `✏️ Modifica Prenotazione (ID: ${id})`;
+        document.getElementById('booking-form-container').classList.add('editing-mode');
+        document.getElementById('btn-save-booking').innerText = "Aggiorna Prenotazione";
+        document.getElementById('btn-cancel-edit').style.display = 'inline-block';
+        document.getElementById('recalc-price-box').style.display = 'block';
+        document.getElementById('chk-recalc-price').checked = false;
+        isPopulatingForm = false; // riattiva updatePreview
+        updatePreview();
+        document.getElementById('prenotazioni').scrollIntoView({behavior: 'smooth'});
+    }
+
+    function cancelEdit() {
+        editingBookingId = null;
+        document.getElementById('booking-form').reset();
+        document.getElementById('form-title').innerText = "Nuova Prenotazione";
+        document.getElementById('booking-form-container').classList.remove('editing-mode');
+        document.getElementById('btn-save-booking').innerText = "Salva Prenotazione";
+        document.getElementById('btn-cancel-edit').style.display = 'none';
+        document.getElementById('recalc-price-box').style.display = 'none';
+        document.getElementById('chk-recalc-price').checked = false;
+        // Rilegge settings da localStorage per avere il valore più aggiornato
+        const freshSettings = JSON.parse(localStorage.getItem(LS.settings) || '{}');
+        document.getElementById('b-linen').value = freshSettings.linenPrice ?? settings.linenPrice ?? 0;
+        document.getElementById('b-deposit').value = 0;
+        document.getElementById('b-deposit-method').value = '';
+        document.getElementById('b-balance-paid').value = 0;
+        document.getElementById('b-balance-method').value = '';
+        document.getElementById('nights-counter').innerText = '';
+        
+        // Ripristina campi data di default per nuova prenotazione
+        document.getElementById('b-start').value = '';
+        document.getElementById('b-end').value = '';
+        setDefaultDates();
+        // Nascondi warning conflitto e date passato
+        const _cw = document.getElementById('conflict-warning');
+        const _pw = document.getElementById('past-dates-warning');
+        const _bs = document.getElementById('btn-save-booking');
+        if (_cw) _cw.style.display = 'none';
+        if (_pw) _pw.style.display = 'none';
+        if (_bs) _bs.disabled = false;
+        updatePreview();
+    }
+
+    function sendWhatsApp(id) {
+        const b = bookings.find(x => x.id === id);
+        if(!b || !b.tel) { alert("Errore: Numero di telefono ospite mancante."); return; }
+        const rawTel = (b.tel || '').trim();
+        const cleanTel = (rawTel.startsWith('+') ? '+' : '') + rawTel.replace(/[^\d]/g, ''); 
+        const startIT = formatIT(b.start); const endIT = formatIT(b.end);
+        const stayCost = b.totalPrice - (b.linen || 0);
+        const totalGuests = b.adults + b.minors;
+        const dep = b.deposit || 0;
+        const balPaid = b.balancePaid || 0;
+        const totPaid = dep + balPaid;
+        const bal = b.totalPrice - totPaid;
+        
+        let text = `Buongiorno ${b.name} ${b.surname},%0A` +
+                   `si conferma la prenotazione per ${totalGuests} persone dal ${startIT} al ${endIT}.%0A` +
+                   `Costo del soggiorno € ${stayCost.toFixed(2)}`;
+        if (b.linen > 0) text += `, extra € ${(b.linen).toFixed(2)}`;
+        text += ` per un totale di € ${b.totalPrice.toFixed(2)}.%0A`;
+        
+        if(totPaid > 0 && bal > 0) {
+            text += `Pagamenti ricevuti: € ${totPaid.toFixed(2)}.%0A`;
+            text += `Da saldare: € ${bal.toFixed(2)}.%0A`;
+        } else if (totPaid > 0 && bal <= 0) {
+            text += `Soggiorno interamente saldato. Grazie!%0A`;
+        }
+        
+        text += `La tassa di soggiorno è di € ${(b.tax||0).toFixed(2)}.%0A`;
+        
+        if (settings.mapsLink) text += `📍 Posizione struttura: ${settings.mapsLink}%0A`;
+        const appObj = apps.find(a => a.id === b.appId);
+        if (appObj && appObj.notes) text += `ℹ️ ${appObj.notes}%0A`;
+        text += `%0AA presto!`;
+        window.open(`https://wa.me/${cleanTel}?text=${text}`, '_blank');
+    }
+
+    // Calcola lo stato automatico in base ai pagamenti registrati
+    // (può essere sovrascritto manualmente dalla modal)
+    function calcAutoStatus(totalPrice, deposit, balancePaid, currentStatus) {
+        // Non toccare le prenotazioni cancellate
+        if (currentStatus === 'cancellata') return 'cancellata';
+        const paid    = (deposit || 0) + (balancePaid || 0);
+        const balance = (totalPrice || 0) - paid;
+        if (balance <= 0 && paid > 0) return 'saldo';
+        if (deposit > 0)              return 'caparra';
+        return 'confermata';
+    }
+
+    document.getElementById('booking-form').onsubmit = function(e) {
+        e.preventDefault();
+        const b = {
+            id: editingBookingId || Date.now(), 
+            status: document.getElementById('b-status').value, channel: document.getElementById('b-channel').value,
+            appId: parseInt(document.getElementById('b-app').value),
+            start: document.getElementById('b-start').value, end: document.getElementById('b-end').value,
+            surname: document.getElementById('b-surname').value, name: document.getElementById('b-name').value,
+            tel: document.getElementById('b-tel').value, mail: document.getElementById('b-mail').value,
+            address: document.getElementById('b-address').value, docType: document.getElementById('b-doc-type').value,
+            docNum: document.getElementById('b-doc-num').value, notes: document.getElementById('b-notes').value,
+            adults: parseInt(document.getElementById('b-adults').value), minors: parseInt(document.getElementById('b-minors').value), 
+            linen: parseFloat(document.getElementById('b-linen').value) || 0,
+            override: document.getElementById('b-price-override').value ? parseFloat(document.getElementById('b-price-override').value) : null,
+            deposit: parseFloat(document.getElementById('b-deposit').value) || 0,
+            depositMethod: document.getElementById('b-deposit-method').value,
+            balancePaid: parseFloat(document.getElementById('b-balance-paid').value) || 0,
+            balanceMethod: document.getElementById('b-balance-method').value
+        };
+        const app = apps.find(a => a.id === b.appId);
+        if((b.adults + b.minors) > app.beds && !confirm(`ERRORE: ${b.adults + b.minors} ospiti superano i ${app.beds} posti di ${app.name}. Salvare comunque?`)) return;
+        if(checkConflicts(b.appId, b.start, b.end, editingBookingId)) { alert("Errore Conflitto Date!"); return; }
+        const doRecalc = !editingBookingId || document.getElementById('chk-recalc-price').checked;
+        if (doRecalc) {
+            b.totalPrice = (b.override !== null ? b.override : autoPriceValue(b.start, b.end, b.appId)) + b.linen;
+        } else {
+            const orig = bookings.find(x => x.id === editingBookingId);
+            if (b.override !== null) {
+                b.totalPrice = b.override + b.linen;
+            } else if (orig) {
+                b.totalPrice = (orig.totalPrice - (orig.linen||0)) + b.linen;
+            } else {
+                b.totalPrice = autoPriceValue(b.start, b.end, b.appId) + b.linen;
+            }
+        }
+        b.tax = calculateTax(b.start, b.end, b.adults, b.minors);
+        // Aggiorna stato automaticamente in base ai pagamenti
+        // (se l'utente ha scelto manualmente "cancellata" lo rispettiamo)
+        const manualStatus = document.getElementById('b-status').value;
+        if (manualStatus !== 'cancellata') {
+            b.status = calcAutoStatus(b.totalPrice, b.deposit, b.balancePaid, manualStatus);
+        }
+        if (editingBookingId) {
+            const index = bookings.findIndex(x => x.id === editingBookingId);
+            if(index !== -1) bookings[index] = b;
+        } else {
+            bookings.push(b);
+        }
+        localStorage.setItem(LS.bookings, JSON.stringify(bookings));
+        upsertGuest(b);
+        cancelEdit(); 
+        populateBookingYears();
+        renderBookingList(); 
+        if (document.getElementById('dashboard').classList.contains('active')) {
+            renderGantt();
+            renderTodayMovements(); 
+        }
+        const logAction = editingBookingId ? 'Modifica' : 'Creazione';
+        const logDetails = `Stato: ${b.status} | Totale: €${(b.totalPrice||0).toFixed(2)} | ${b.start}→${b.end}`;
+        logBookingChange(b.id, logAction, logDetails);
+        // Nascondi warning conflitto dopo salvataggio
+        const cw2 = document.getElementById('conflict-warning');
+        const pw2 = document.getElementById('past-dates-warning');
+        if (cw2) cw2.style.display = 'none';
+        if (pw2) pw2.style.display = 'none';
+        showToast('Prenotazione salvata!');
+        markAsModified();
+    };
+
+    function populateBookingYears() {
+        const sel = document.getElementById('filter-b-year');
+        if(!sel) return;
+        const years = new Set(bookings.map(b => b.start?.slice(0,4)).filter(Boolean));
+        const currentYear = new Date().getFullYear().toString();
+        years.add(currentYear);
+        sel.innerHTML = '<option value="all">Tutti gli anni</option>';
+        [...years].sort().reverse().forEach(y => sel.add(new Option(y, y)));
+        sel.value = currentYear; 
+    }
+
+    function clearBookingFilters() {
+        document.getElementById('filter-b-year').value = new Date().getFullYear().toString();
+        document.getElementById('filter-b-name').value = '';
+        document.getElementById('filter-b-app').value = 'all';
+        document.getElementById('filter-b-status').value = 'all';
+        document.getElementById('filter-b-month').value = '';
+        renderBookingList();
+    }
+
+    function buildSaldoCell(b) {
+        const tot     = b.totalPrice || 0;
+        const paid    = (b.deposit || 0) + (b.balancePaid || 0);
+        const residuo = tot - paid;
+        const active  = b.status !== 'cancellata';
+        let icon = '';
+        if (active) {
+            icon = residuo <= 0 ? ' 🟢' : (paid > 0 ? ' 🟡' : ' 🔴');
+        }
+        let extra = '';
+        if (active && residuo > 0) {
+            extra = '<br><small style="color:#e74c3c;font-size:0.78rem;">res. €' + residuo.toFixed(2) + '</small>';
+        }
+        const tooltip = active
+            ? (residuo <= 0 ? 'Saldato' : (paid > 0 ? 'Da saldare €' + residuo.toFixed(2) : 'Nessun pagamento'))
+            : 'Cancellata';
+        return '<span title="' + tooltip + '">€' + tot.toFixed(2) + icon + '</span>' + extra;
+    }
+
+    function renderBookingList() {
+        const tbody = document.querySelector('#booking-list tbody'); tbody.innerHTML = '';
+        const statusMap = { 'confermata': 'Confermata', 'caparra': 'Caparra', 'saldo': 'Saldato', 'cancellata': 'Cancellata' };
+        
+        const fYear   = document.getElementById('filter-b-year')?.value || 'all';
+        const fName   = (document.getElementById('filter-b-name')?.value || '').toLowerCase();
+        const fApp    = document.getElementById('filter-b-app')?.value || 'all';
+        const fStatus = document.getElementById('filter-b-status')?.value || 'all';
+        const fMonth  = document.getElementById('filter-b-month')?.value || '';
+
+        let list = [...bookings].sort((a,b) => new Date(a.start) - new Date(b.start));
+        
+        if(fYear !== 'all') list = list.filter(b => b.start && b.start.slice(0,4) === fYear);
+        if(fName)   list = list.filter(b => 
+((b.surname||'').toLowerCase().includes(fName)) ||
+((b.name||'').toLowerCase().includes(fName)) ||
+((b.tel||'').toLowerCase().includes(fName)) ||
+((b.mail||'').toLowerCase().includes(fName)) ||
+((b.notes||'').toLowerCase().includes(fName))
+);
+        if(fApp !== 'all') list = list.filter(b => b.appId === parseInt(fApp));
+        if(fStatus === 'da_saldare') {
+            list = list.filter(b => b.status !== 'cancellata' && ((b.totalPrice||0) - (b.deposit||0) - (b.balancePaid||0)) > 0);
+        } else if(fStatus !== 'all') {
+            list = list.filter(b => b.status === fStatus);
+        }
+        if(fMonth)  list = list.filter(b => b.start && b.start.slice(0,7) === fMonth);
+
+        if(list.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#aaa;padding:20px;">Nessuna prenotazione trovata con i filtri attuali</td></tr>';
+            return;
+        }
+        const rows = [];
+        list.forEach(b => {
+            const sc = `status-${b.status}`;
+            rows.push(`<tr>
+                <td><span style="background:var(--${sc}); color:white; padding:3px 8px; border-radius:12px; font-size:0.8rem;">${statusMap[b.status]||b.status}</span></td>
+                <td>${escHtml(b.channel)}</td><td>${escHtml(apps.find(a=>a.id===b.appId)?.name||'?')}</td>
+                <td>${escHtml(b.surname)} ${escHtml(b.name)}</td>
+                <td>${formatIT(b.start)} / ${formatIT(b.end)}</td>
+                <td>${buildSaldoCell(b)}</td>
+                <td>
+                    <button onclick="sendWhatsApp(${b.id})" class="btn btn-whatsapp" style="padding:2px 5px; margin-right:5px;" title="Invia WhatsApp">📱</button>
+                    <button onclick="openBookingModal(${b.id})" class="btn" style="background:#bdc3c7; padding:2px 5px; margin-right:5px;" title="Dettaglio">🔍</button>
+                    <button onclick="editBooking(${b.id})" class="btn btn-warning" style="padding:2px 5px; margin-right:5px;" title="Modifica">✏️</button>
+                    <button onclick="duplicateBooking(${b.id})" class="btn" style="background:#8e44ad; color:white; padding:2px 5px; margin-right:5px;" title="Duplica prenotazione">📋</button>
+                    <button onclick="deleteBooking(${b.id})" class="btn btn-danger" style="padding:2px 5px" title="Elimina">X</button>
+                </td></tr>`);
+        });
+        tbody.innerHTML = rows.join('');
+        
+    }
+
+    function duplicateBooking(id) {
+        const b = bookings.find(x => x.id === id); if(!b) return;
+        isPopulatingForm = true;
+        if(!confirm(`Duplicare la prenotazione di ${b.surname} ${b.name}?\nSi aprirà il form precompilato (senza le date) per inserire il nuovo periodo.`)) return;
+        showTab('prenotazioni');
+        cancelEdit();
+        // Precompila tutti i dati tranne le date e i pagamenti
+        document.getElementById('b-app').value      = b.appId;
+        document.getElementById('b-status').value   = 'confermata';
+        document.getElementById('b-channel').value  = b.channel || 'Diretto';
+        document.getElementById('b-surname').value  = b.surname || '';
+        document.getElementById('b-name').value     = b.name    || '';
+        document.getElementById('b-tel').value      = b.tel     || '';
+        document.getElementById('b-mail').value     = b.mail    || '';
+        document.getElementById('b-address').value  = b.address || '';
+        if(b.docType) document.getElementById('b-doc-type').value = b.docType;
+        document.getElementById('b-doc-num').value  = b.docNum  || '';
+        document.getElementById('b-adults').value   = b.adults  || 1;
+        document.getElementById('b-minors').value   = b.minors  || 0;
+        document.getElementById('b-linen').value    = b.linen   || settings.linenPrice;
+        document.getElementById('b-notes').value    = b.notes   || '';
+        document.getElementById('b-deposit').value      = 0;
+        document.getElementById('b-balance-paid').value = 0;
+        document.getElementById('b-start').value    = '';
+        document.getElementById('b-end').value      = '';
+        document.getElementById('form-title').innerText = `📋 Duplica da: ${b.surname} ${b.name}`;
+        document.getElementById('booking-form-container').style.borderLeft = '4px solid #8e44ad';
+        setTimeout(() => { document.getElementById('booking-form-container').style.borderLeft = ''; }, 3000);
+        isPopulatingForm = false; // riattiva updatePreview
+        document.getElementById('prenotazioni').scrollIntoView({behavior:'smooth'});
+        showToast('Form precompilato – inserisci le nuove date', 'success');
+    }
+
+    function duplicateFromModal() {
+        const id = parseInt(document.getElementById('md-id').value);
+        closeModal('detail-modal');
+        duplicateBooking(id);
+    }
+
+    function deleteBooking(id) { 
+        if(confirm("Eliminare questa prenotazione? L'operazione è irreversibile.")) { 
+            bookings = bookings.filter(b => b.id !== id); 
+            localStorage.setItem(LS.bookings, JSON.stringify(bookings)); 
+            renderBookingList(); renderGantt(); 
+            showToast('Prenotazione eliminata','error'); 
+            markAsModified(); // Segnala che serve un backup
+        } 
+    }
+
+    function openBookingModal(id) {
+        const b = bookings.find(x => x.id === id); if(!b) return;
+        document.getElementById('md-id').value = b.id;
+        document.getElementById('md-id-display').innerText = `ID: ${b.id}`;
+        document.getElementById('md-status').value = b.status;
+        const appName = apps.find(a=>a.id===b.appId)?.name;
+        
+        const dep = b.deposit || 0;
+        const balPaid = b.balancePaid || 0;
+        const totPaid = dep + balPaid;
+        const bal = b.totalPrice - totPaid;
+        
+        let finHtml = `<b>Totale Soggiorno:</b> €${b.totalPrice.toFixed(2)} <br>`;
+        if(dep > 0) finHtml += `<b>Caparra Versata:</b> €${dep.toFixed(2)} ${b.depositMethod ? `(<i>${b.depositMethod}</i>)` : ''} <br>`;
+        if(balPaid > 0) finHtml += `<b>Saldo Versato:</b> €${balPaid.toFixed(2)} ${b.balanceMethod ? `(<i>${b.balanceMethod}</i>)` : ''} <br>`;
+        finHtml += `<span style="color:${bal > 0 ? 'var(--danger)' : 'var(--success)'}; font-size:1.1rem; display:inline-block; margin-top:5px;"><b>${bal > 0 ? 'Da Saldare' : 'Saldato Interamente'}: €${Math.max(0, bal).toFixed(2)}</b></span> <br>`;
+        finHtml += `<div style="margin-top:5px; font-size:0.85rem; color:#666;"><b>Tassa Soggiorno:</b> €${(b.tax||0).toFixed(2)} (da riscuotere a parte)</div>`;
+        
+        document.getElementById('md-content').innerHTML = `
+            <b>Ospite:</b> ${escHtml(b.surname)} ${escHtml(b.name)} <br>
+            <b>Alloggio:</b> ${escHtml(appName)} (${escHtml(b.channel)}) <br>
+            <b>Date:</b> ${formatIT(b.start)} ➝ ${formatIT(b.end)} (${Math.ceil((new Date(b.end)-new Date(b.start))/86400000)} notti)<br>
+            <b>Ospiti:</b> ${b.adults} adulti, ${b.minors} minori<br>
+            <b>Contatti:</b> ${escHtml(b.tel || 'N/A')} | ${escHtml(b.mail || 'N/A')} <br>
+            <b>Residenza:</b> ${escHtml(b.address || 'Non indicata')}<br>
+            <b>Documento:</b> ${escHtml(b.docType || 'N/A')} n° ${escHtml(b.docNum || 'N/A')}<br>
+            <hr>
+            <b>Finanze:</b><br>
+            ${finHtml}
+            <hr>
+            <b>Note:</b> ${escHtml(b.notes || 'Nessuna nota.')}
+            ${(() => {
+                const log = getBookingLog(b.id);
+                if (!log.length) return '';
+                const rows = log.slice(0,4).map(e => {
+                    const d = new Date(e.ts).toLocaleString('it-IT',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+                    return `<div style="display:flex;gap:6px;"><span style="color:#aaa;min-width:100px;">${d}</span><span><b>${e.action}</b>${e.details ? ' — '+e.details : ''}</span></div>`;
+                }).join('');
+                return `<hr><div style="font-size:0.8rem;color:#555;"><b>📋 Storico</b><br>${rows}</div>`;
+            })()}
+        `;
+        document.getElementById('detail-modal').style.display = 'flex';
+    }
+
+    function updateBookingStatus() {
+        const id = parseInt(document.getElementById('md-id').value);
+        const b = bookings.find(x => x.id === id);
+        if(!b) return;
+        b.status = document.getElementById('md-status').value;
+        localStorage.setItem(LS.bookings, JSON.stringify(bookings));
+        closeModal('detail-modal'); renderBookingList(); renderGantt();
+        logBookingChange(id, 'Cambio stato', `Nuovo stato: ${b.status}`);
+        showToast('Stato aggiornato!');
+        markAsModified();
+        // Flash verde sulla riga aggiornata
+        setTimeout(() => {
+            const rows = document.querySelectorAll('#booking-list tbody tr');
+            rows.forEach(row => {
+                if(row.innerHTML.includes(`openBookingModal(${id})`)) {
+                    row.classList.add('row-flash');
+                    setTimeout(() => row.classList.remove('row-flash'), 1300);
+                }
+            });
+        }, 100);
+    }
+
+    function openFullEditFromModal() {
+        const id = parseInt(document.getElementById('md-id').value);
+        closeModal('detail-modal'); editBooking(id);
+    }
+
+    function sendPaymentWa() {
+        const id = parseInt(document.getElementById('md-id').value);
+        const b = bookings.find(x => x.id === id);
+        if(!b || !b.tel) { alert("Errore: Numero di telefono ospite mancante."); return; }
+        
+        const rawTel2 = (b.tel || '').trim();
+        const cleanTel = (rawTel2.startsWith('+') ? '+' : '') + rawTel2.replace(/[^\d]/g, '');
+        const app = apps.find(a => a.id === b.appId);
+        const appName = app ? app.name : "la nostra struttura";
+        const startIT = formatIT(b.start);
+        const endIT = formatIT(b.end);
+        const firma = settings.firma || "La Direzione";
+        
+        const dep = b.deposit || 0;
+        const balPaid = b.balancePaid || 0;
+        const totPaid = dep + balPaid;
+        const bal = b.totalPrice - totPaid;
+        
+        let text = `Gentile ${b.name} ${b.surname},%0A%0A`;
+        
+        if ((b.status === 'caparra') && dep > 0 && balPaid === 0) {
+            text += `Con la presente le confermiamo di aver ricevuto correttamente la caparra di € ${dep.toFixed(2)}`;
+            if (b.depositMethod) text += ` tramite ${b.depositMethod}`;
+            text += ` relativa alla sua prenotazione presso ${appName} dal ${startIT} al ${endIT}.%0A`;
+            text += `Il saldo rimanente è di € ${bal.toFixed(2)} (oltre alla tassa di soggiorno).%0A%0A`;
+        } else if ((b.status === 'saldo' || bal <= 0) && totPaid > 0) {
+            let importoPagato = balPaid > 0 ? balPaid : dep;
+            let metodoPagato = balPaid > 0 ? b.balanceMethod : b.depositMethod;
+            
+            text += `Con la presente le confermiamo di aver ricevuto correttamente il saldo di € ${importoPagato.toFixed(2)}`;
+            if (metodoPagato) text += ` tramite ${metodoPagato}`;
+            text += `.%0ALa sua prenotazione presso ${appName} dal ${startIT} al ${endIT} risulta ora interamente saldata! 🎉%0A%0A`;
+        } else {
+            text += `Con la presente le confermiamo di aver ricevuto correttamente un pagamento di € ${totPaid.toFixed(2)} relativo alla sua prenotazione presso ${appName} dal ${startIT} al ${endIT}.%0A%0A`;
+        }
+        
+        text += `Restiamo a sua completa disposizione per qualsiasi necessità.%0A%0A`;
+        text += `Cordiali saluti,%0A${firma}`;
+        
+        window.open(`https://wa.me/${cleanTel}?text=${text}`, '_blank');
+    }
+
+    // ── GANTT DINAMICO ────────────────────────────────────────────
+    let ganttYear  = new Date().getFullYear();
+    let ganttMonth = new Date().getMonth();
+
+    function renderGantt() {
+        const year  = ganttYear;
+        const month = ganttMonth;
+        const daysInMonth = new Date(year, month+1, 0).getDate();
+        const monthName = new Date(year, month, 1).toLocaleDateString('it-IT', {month:'long', year:'numeric'});
+        const monthValueStr = `${year}-${String(month + 1).padStart(2, '0')}`;
+
+        let nav = `<div style="display:flex; justify-content:space-between; align-items:center; background:#f8f9fa; padding:10px 15px; border-radius:8px; margin-bottom:15px; border:1px solid #e0e6ed; flex-wrap:wrap; gap:10px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+                <button onclick="ganttPrevYear()" class="btn" style="padding:6px 10px; margin:0; background:#7f8c8d; color:white; font-size:0.9rem;" title="Anno precedente">«</button>
+                <button onclick="ganttPrev()" class="btn" style="padding:6px 15px; margin:0; background:#34495e; color:white; font-size:1.1rem;" title="Mese precedente">←</button>
+                <div style="display:flex; flex-direction:column; align-items:center;">
+                    <strong style="font-size:1.2rem; text-transform:capitalize; color:var(--primary); line-height:1;">${monthName}</strong>
+                    <input type="month" value="${monthValueStr}" onchange="ganttGoToMonth(this.value)" style="padding:2px; font-size:0.8rem; border:none; background:transparent; cursor:pointer; color:#7f8c8d; margin-top:2px;">
+                </div>
+                <button onclick="ganttNext()" class="btn" style="padding:6px 15px; margin:0; background:#34495e; color:white; font-size:1.1rem;" title="Mese successivo">→</button>
+                <button onclick="ganttNextYear()" class="btn" style="padding:6px 10px; margin:0; background:#7f8c8d; color:white; font-size:0.9rem;" title="Anno successivo">»</button>
+            </div>
+            <button onclick="ganttToday()" class="btn btn-primary" style="padding:6px 15px; margin:0; font-size:0.9rem;">Vai a Oggi</button>
+        </div>`;
+
+        let html = `<table class="gantt"><thead><tr><th style="min-width:100px;text-align:left;padding-left:6px;">App.</th>`;
+        for(let d=1; d<=daysInMonth; d++) {
+            const dow = new Date(year, month, d).getDay();
+            const isWe = dow===0 || dow===6;
+            const todayH = new Date(); todayH.setHours(0,0,0,0);
+            const isTodayH = new Date(year,month,d).getTime() === todayH.getTime();
+            const thStyle = isTodayH ? 'background:#fbbf24;color:#1a1a1a;font-weight:bold;' : (isWe ? 'background:#dce8f7;' : '');
+            html += `<th style="${thStyle}" title="${isTodayH?'Oggi':''}">${d}${isTodayH?'●':''}</th>`;
+        }
+        html += `</tr></thead><tbody>`;
+
+        apps.forEach(app => {
+            html += `<tr><td style="font-weight:bold;white-space:nowrap;text-align:left;padding-left:6px;">${escHtml(app.name)}</td>`;
+            for(let d=1; d<=daysInMonth; d++) {
+                const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                const dow = new Date(year, month, d).getDay();
+                const isWe = dow===0 || dow===6;
+                const b = bookings.find(bk => bk.appId===app.id && dateStr>=bk.start && dateStr<bk.end && bk.status !== 'cancellata');
+                if(b) {
+                    const ini = (b.surname||'?').charAt(0).toUpperCase();
+                    html += `<td class="booked-${b.status}" onclick="openBookingModal(${b.id})" title="${escHtml(b.surname)} ${escHtml(b.name)}">${ini}</td>`;
+                } else {
+                    html += `<td style="${isWe?'background:#f0f5fc;':''}"></td>`;
+                }
+            }
+            html += `</tr>`;
+        });
+        html += `</tbody></table>`;
+        document.getElementById('gantt-chart').innerHTML = nav + html;
+    }
+    function ganttPrev()     { if(ganttMonth===0){ganttMonth=11;ganttYear--;} else ganttMonth--; renderGantt(); }
+    function ganttNext()     { if(ganttMonth===11){ganttMonth=0;ganttYear++;} else ganttMonth++; renderGantt(); }
+    function ganttPrevYear() { ganttYear--; renderGantt(); }
+    function ganttNextYear() { ganttYear++; renderGantt(); }
+    function ganttToday()    { ganttYear=new Date().getFullYear(); ganttMonth=new Date().getMonth(); renderGantt(); }
+    function ganttGoToMonth(val) { 
+        if(!val) return; 
+        const [y, m] = val.split('-'); 
+        ganttYear = parseInt(y); 
+        ganttMonth = parseInt(m) - 1; 
+        renderGantt(); 
+    }
+
+    // Utility: calcola i giorni di stagione per l'anno dato
+    function getSeasonDays(year) {
+        const ss = settings.seasonStart || '06-01';
+        const se = settings.seasonEnd   || '09-30';
+        const start = new Date(`${year}-${ss}`);
+        const end   = new Date(`${year}-${se}`);
+        if(isNaN(start) || isNaN(end) || end <= start) return 122; // fallback
+        return Math.ceil((end - start) / 86400000) + 1;
+    }
+
+    // Utility: parse stagione in {startMonth (0-based), endMonth (0-based)}
+    function getSeasonMonthRange() {
+        const ss = (settings.seasonStart || '06-01').split('-');
+        const se = (settings.seasonEnd   || '09-30').split('-');
+        return { startMonth: parseInt(ss[0]) - 1, endMonth: parseInt(se[0]) - 1 };
+    }
+
+    function updateDashboardCharts() {
+        const validBookings = bookings.filter(b => b.status !== 'cancellata');
+        const { startMonth, endMonth } = getSeasonMonthRange();
+        const numMonths = endMonth - startMonth + 1;
+        const monthNames = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
+        const labels = [];
+        for(let m = startMonth; m <= endMonth; m++) labels.push(monthNames[m]);
+        
+        const revMonths = new Array(numMonths).fill(0);
+        validBookings.forEach(b => {
+            const m = new Date(b.start).getMonth();
+            if(m >= startMonth && m <= endMonth) revMonths[m - startMonth] += b.totalPrice;
+        });
+
+        if(myCharts['revenue']) myCharts['revenue'].destroy();
+        const ctxRev = document.getElementById('revenueChart').getContext('2d');
+        myCharts['revenue'] = new Chart(ctxRev, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{ label: 'Entrate (€)', data: revMonths, backgroundColor: '#3498db', borderRadius: 5 }]
+            },
+            options: { responsive: true, maintainAspectRatio: false }
+        });
+        
+        const channelCounts = {};
+        validBookings.forEach(b => { channelCounts[b.channel] = (channelCounts[b.channel] || 0) + 1; });
+        if(myCharts['channel']) myCharts['channel'].destroy();
+        const ctxChan = document.getElementById('channelChart').getContext('2d');
+        myCharts['channel'] = new Chart(ctxChan, {
+            type: 'doughnut',
+            data: {
+                labels: Object.keys(channelCounts),
+                datasets: [{ data: Object.values(channelCounts), backgroundColor: ['#2ecc71', '#e74c3c', '#f1c40f', '#9b59b6', '#34495e'] }]
+            },
+            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right', labels:{boxWidth:12, font:{size:10}} } } }
+        });
+        
+        // Occupazione: usa i giorni effettivi della stagione per ogni anno
+        const ss = settings.seasonStart || '06-01';
+        const se = settings.seasonEnd   || '09-30';
+        let totalOccupiedNights = 0;
+        let occupancyYear = new Date().getFullYear();
+        const seasonStart = new Date(`${occupancyYear}-${ss}`);
+        const seasonEnd   = new Date(`${occupancyYear}-${se}`);
+        const seasonDays  = getSeasonDays(occupancyYear);
+        const totalPossibleNights = apps.length * seasonDays;
+
+        validBookings.forEach(b => {
+            // Conta solo le notti che cadono nella stagione corrente
+            const bStart = new Date(b.start);
+            const bEnd   = new Date(b.end);
+            const overlapStart = bStart > seasonStart ? bStart : seasonStart;
+            const overlapEnd   = bEnd   < seasonEnd   ? bEnd   : seasonEnd;
+            if(overlapEnd > overlapStart) {
+                totalOccupiedNights += Math.ceil((overlapEnd - overlapStart) / 86400000);
+            }
+        });
+
+        let occPercentage = totalPossibleNights > 0 ? Math.round((totalOccupiedNights / totalPossibleNights) * 100) : 0;
+        const seasonLabel = `${ss.split('-').reverse().join('/')} – ${se.split('-').reverse().join('/')}`;
+        document.getElementById('occ-bar').style.width = `${Math.min(occPercentage,100)}%`;
+        document.getElementById('occ-text').innerText = `${Math.min(occPercentage,100)}% (${totalOccupiedNights} notti su ${totalPossibleNights} – stagione ${seasonLabel})`;
+    }
+
+    document.getElementById('expense-form').onsubmit = function(e) {
+        e.preventDefault();
+        expenses.push({ id: Date.now(), date: document.getElementById('e-date').value, appId: parseInt(document.getElementById('e-app').value),
+            category: document.getElementById('e-cat').value, desc: document.getElementById('e-desc').value, amount: parseFloat(document.getElementById('e-amount').value) });
+        localStorage.setItem(LS.expenses, JSON.stringify(expenses)); 
+        this.reset(); 
+        
+        // Reimposta la data odierna dopo aver salvato
+        document.getElementById('e-date').value = '';
+        setDefaultDates();
+        
+        renderExpenseList(); 
+        showToast('Spesa registrata!');
+        markAsModified(); // Segnala che serve un backup
+    };
+
+    function renderExpenseList() {
+        updateExpenseYears();
+        const yr  = document.getElementById('filter-e-year')?.value || 'all';
+        const mo  = document.getElementById('filter-e-month')?.value || 'all';
+        const a   = document.getElementById('filter-e-app')?.value || 'all';
+        const c   = document.getElementById('filter-e-cat')?.value || 'all';
+        let filtered = [...expenses];
+        if(yr !== 'all') filtered = filtered.filter(e => e.date?.slice(0,4) === yr);
+        if(mo !== 'all') filtered = filtered.filter(e => e.date?.slice(5,7) === mo);
+        if(a !== 'all')  filtered = filtered.filter(e => e.appId === parseInt(a));
+        if(c !== 'all')  filtered = filtered.filter(e => e.category === c);
+
+        const tbody = document.querySelector('#expense-list tbody');
+        tbody.innerHTML = '';
+        let tot = 0;
+        const expRows = [];
+        filtered.forEach(e => {
+            tot += e.amount;
+            const appName = e.appId===0 ? 'Generale' : escHtml(apps.find(ap=>ap.id===e.appId)?.name||'?');
+            expRows.push(`<tr>
+                <td>${formatIT(e.date)}</td><td>${appName}</td><td>${escHtml(e.category)}</td>
+                <td>${escHtml(e.desc||'')}</td><td>€${e.amount.toFixed(2)}</td>
+                <td><button onclick="deleteExpense(${e.id})" class="btn btn-danger" style="padding:2px 6px;">X</button></td></tr>`);
+        });
+        tbody.innerHTML = expRows.join('');
+        document.getElementById('e-total-filtered').innerText = `€ ${tot.toFixed(2)}`;
+    }
+
+    function deleteExpense(id) {
+        if(confirm("Eliminare questa spesa?")) {
+            expenses = expenses.filter(e=>e.id!==id);
+            localStorage.setItem(LS.expenses, JSON.stringify(expenses));
+            renderExpenseList();
+            markAsModified(); // Segnala che serve un backup
+        }
+    }
+
+    function updateExpenseYears() {
+        const yearSel = document.getElementById('filter-e-year');
+        if(!yearSel) return;
+        const currentVal = yearSel.value; 
+        const years = new Set(expenses.map(e => e.date?.slice(0,4)).filter(Boolean));
+        years.add(String(new Date().getFullYear()));
+        yearSel.innerHTML = '<option value="all">Tutti gli anni</option>';
+        [...years].sort().reverse().forEach(y => yearSel.add(new Option(y, y)));
+        if (currentVal && Array.from(yearSel.options).some(opt => opt.value === currentVal)) {
+            yearSel.value = currentVal;
+        }
+    }
+
+    function resetExpenseFilters() {
+        document.getElementById('filter-e-year').value = 'all';
+        document.getElementById('filter-e-month').value = 'all';
+        document.getElementById('filter-e-app').value = 'all';
+        document.getElementById('filter-e-cat').value = 'all';
+        renderExpenseList();
+    }
+
+    function exportIcal() {
+        if (bookings.length === 0) { showToast('Nessuna prenotazione da esportare', 'error'); return; }
+        const CRLF = '\r\n';
+        const pad  = n => String(n).padStart(2, '0');
+        const fmtIcal = dateStr => {
+            if (!dateStr) return '';
+            const [y, m, d] = dateStr.split('-');
+            return `${y}${m}${d}`;
+        };
+        const esc = str => (str || '')
+            .replace(/\\/g, '\\\\')
+            .replace(/;/g, '\\;')
+            .replace(/,/g, '\\,')
+            .replace(/\n/g, '\\n');
+        const now   = new Date();
+        const stamp = `${now.getFullYear()}${pad(now.getMonth()+1)}${pad(now.getDate())}T${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}Z`;
+
+        const lines = [
+            'BEGIN:VCALENDAR',
+            'VERSION:2.0',
+            'PRODID:-//Gestore Affitti Brevi PRO//IT',
+            'CALSCALE:GREGORIAN',
+            'METHOD:PUBLISH'
+        ];
+
+        bookings.filter(b => b.status !== 'cancellata').forEach(b => {
+            const appName = apps.find(a => a.id === b.appId)?.name || 'N/D';
+            const summary = esc(`${b.surname} ${b.name} \u2014 ${appName}`);
+            const desc    = esc(`Ospiti: ${b.adults} adulti${b.minors > 0 ? ', ' + b.minors + ' minori' : ''} | Totale: \u20ac${(b.totalPrice || 0).toFixed(2)} | Canale: ${b.channel || ''} | Tel: ${b.tel || ''}`);
+            const uid     = `pms-${b.id}@gestore-affitti`;
+            lines.push(
+                'BEGIN:VEVENT',
+                `UID:${uid}`,
+                `DTSTAMP:${stamp}`,
+                `DTSTART;VALUE=DATE:${fmtIcal(b.start)}`,
+                `DTEND;VALUE=DATE:${fmtIcal(b.end)}`,
+                `SUMMARY:${summary}`,
+                `DESCRIPTION:${desc}`,
+                'STATUS:CONFIRMED',
+                'END:VEVENT'
+            );
+        });
+
+        lines.push('END:VCALENDAR');
+        const icsContent = lines.join(CRLF) + CRLF;
+
+        const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `prenotazioni_${new Date().getFullYear()}.ics`;
+        a.click();
+        showToast('File iCal esportato!');
+    }
+
+    function exportExpensesCSV() {
+        let csv = 'Data;Appartamento;Categoria;Descrizione;Importo\n';
+        expenses.forEach(e => {
+            const appName = e.appId===0 ? 'Generale' : (apps.find(ap=>ap.id===e.appId)?.name||'?');
+            csv += `${e.date};${appName};${e.category};${e.desc};${e.amount}\n`;
+        });
+        const blob = new Blob([csv], {type:'text/csv'});
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'spese.csv';
+        link.click();
+    }
+
+    function populateReportFilters() {
+        const yearSel = document.getElementById('filter-report-year');
+        const appSel  = document.getElementById('filter-report-app');
+        const years = new Set(bookings.map(b => b.start?.slice(0,4)).filter(Boolean));
+        years.add(String(new Date().getFullYear()));
+        yearSel.innerHTML = '';
+        [...years].sort().reverse().forEach(y => yearSel.add(new Option(y, y)));
+        appSel.innerHTML = '<option value="all">Tutti</option>';
+        apps.forEach(a => appSel.add(new Option(a.name, a.id)));
+    }
+
+    
+function renderCreditsList(){
+ const el=document.getElementById('credits-list');
+ if(!el) return;
+ const pending=bookings.filter(b=> (b.status!=='cancellata') && (((b.totalPrice||0)-((b.deposit||0)+(b.balancePaid||0)))>0));
+ if(!pending.length){ el.innerHTML='<p>Nessun credito da incassare.</p>'; return; }
+ el.innerHTML='<ul>'+pending.map(b=>{
+ const due=((b.totalPrice||0)-((b.deposit||0)+(b.balancePaid||0))).toFixed(2);
+ return `<li><b>${escHtml(b.surname)} ${escHtml(b.name)}</b> - Arrivo ${formatIT(b.start)} - Da incassare € ${due}</li>`;
+ }).join('')+'</ul>';
+}
+
+
+function renderUpcomingCredits(){
+ const el=document.getElementById('upcoming-credits');
+ if(!el) return;
+ const now=new Date();
+ const limit=new Date();
+ limit.setDate(limit.getDate()+7);
+ const items=bookings.filter(b=>{
+   if(b.status==='cancellata') return false;
+   const due=(b.totalPrice||0)-((b.deposit||0)+(b.balancePaid||0));
+   const d=new Date(b.start);
+   return due>0 && d>=now && d<=limit;
+ });
+ if(!items.length){el.innerHTML='<p>Nessun incasso previsto nei prossimi 7 giorni.</p>';return;}
+ el.innerHTML='<ul>'+items.map(b=>`<li><b>${escHtml(b.surname)} ${escHtml(b.name)}</b> - Arrivo ${formatIT(b.start)} - € ${(((b.totalPrice||0)-((b.deposit||0)+(b.balancePaid||0))).toFixed(2))}</li>`).join('')+'</ul>';
+}
+
+function exportBookingsCSV(){
+ let rows=[['Appartamento','Ospite','CheckIn','CheckOut','Totale','Caparra','SaldoVersato','SaldoResiduo','Stato','Canale','Telefono','Email','Note']];
+ bookings.forEach(b=>{
+   const app=(apps.find(a=>a.id==b.appId)||{}).name||'';
+   const paid=(b.deposit||0)+(b.balancePaid||0);
+   const residuo=Math.max(0,(b.totalPrice||0)-paid);
+   rows.push([app,`${b.surname||''} ${b.name||''}`,b.start||'',b.end||'',
+     (b.totalPrice||0).toFixed(2),(b.deposit||0).toFixed(2),(b.balancePaid||0).toFixed(2),
+     residuo.toFixed(2),b.status||'',b.channel||'',b.tel||'',b.mail||'',b.notes||'']);
+ });
+ const bom='\uFEFF';
+ const csv=bom+rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}`).join(';')).join('\n');
+ const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+ const a=document.createElement('a');
+ a.href=URL.createObjectURL(blob);
+ a.download=`prenotazioni_${new Date().getFullYear()}.csv`;
+ a.click();
+}
+
+function calculateFinances() {
+        const selYear = document.getElementById('filter-report-year')?.value;
+        const selApp  = document.getElementById('filter-report-app')?.value;
+
+        let filtBk = bookings.filter(b => b.status!=='cancellata' && b.start?.slice(0,4)===selYear);
+        let filtEx = expenses.filter(e => e.date?.slice(0,4)===selYear);
+        if(selApp !== 'all') {
+            filtBk = filtBk.filter(b => b.appId === parseInt(selApp));
+            filtEx = filtEx.filter(e => e.appId === parseInt(selApp) || e.appId === 0);
+        }
+
+        let rev = 0, exp = 0, tax = 0;
+        filtBk.forEach(b => { rev += b.totalPrice||0; tax += b.tax||0; });
+        filtEx.forEach(e => { exp += e.amount||0; });
+
+        document.getElementById('total-revenue').innerText = `€ ${rev.toFixed(2)}`;
+        document.getElementById('total-expenses').innerText = `€ ${exp.toFixed(2)}`;
+        document.getElementById('total-net').innerText = `€ ${(rev - exp).toFixed(2)}`;
+        document.getElementById('total-tax-fund').innerText = `€ ${tax.toFixed(2)}`;
+        
+        renderTaxReports();
+    }
+
+    function renderTaxReports() {
+        const monthVal = document.getElementById('report-month')?.value;
+        if(!monthVal) return;
+        const [yr, mo] = monthVal.split('-').map(Number);
+        const filtered = bookings.filter(b => {
+            if(b.status==='cancellata') return false;
+            const end = new Date(b.end);
+            return end.getFullYear()===yr && end.getMonth()===mo-1;
+        });
+        let tot = 0;
+        let html = `<table><thead><tr style="background:#eee;"><th>Appartamento</th><th>Ospite</th><th>Notti</th><th>Imposta</th></tr></thead><tbody>`;
+        filtered.forEach(b => {
+            tot += b.tax||0;
+            html += `<tr><td>${escHtml(apps.find(a=>a.id===b.appId)?.name||'?')}</td><td>${escHtml(b.surname)}</td><td>${Math.ceil((new Date(b.end)-new Date(b.start))/86400000)}</td><td>€${(b.tax||0).toFixed(2)}</td></tr>`;
+        });
+        html += `</tbody><tfoot><tr style="font-weight:bold;"><td colspan="3">TOTALE</td><td>€${tot.toFixed(2)}</td></tr></tfoot></table>`;
+        document.getElementById('monthly-tax-report').innerHTML = html;
+    }
+
+    function openSeasonReport() {
+        const selYear = document.getElementById('filter-report-year')?.value || new Date().getFullYear().toString();
+        const validBk = bookings.filter(b => b.status !== 'cancellata' && b.start?.slice(0,4) === selYear);
+        if (!validBk.length) { showToast('Nessuna prenotazione per questo anno','error'); return; }
+
+        // Calcoli
+        const totalNights   = validBk.reduce((s,b) => s + Math.ceil((new Date(b.end)-new Date(b.start))/86400000), 0);
+        const totalRevenue  = validBk.reduce((s,b) => s + (b.totalPrice||0), 0);
+        const avgNights     = (totalNights / validBk.length).toFixed(1);
+        const avgRevenue    = (totalRevenue / validBk.length).toFixed(2);
+
+        // Tasso di occupazione per appartamento
+        const seasonDays = getSeasonDays(parseInt(selYear));
+        const appOcc = {};
+        apps.forEach(a => { appOcc[a.id] = { name: a.name, nights: 0 }; });
+        validBk.forEach(b => {
+            if (appOcc[b.appId]) appOcc[b.appId].nights += Math.ceil((new Date(b.end)-new Date(b.start))/86400000);
+        });
+
+        // Canali
+        const channels = {};
+        validBk.forEach(b => { channels[b.channel||'N/D'] = (channels[b.channel||'N/D']||0) + 1; });
+        const topChannel = Object.entries(channels).sort((a,b)=>b[1]-a[1])[0];
+
+        // Ospiti nuovi vs abituali
+        const guestKeys = validBk.map(b => guestKey(b.surname, b.name));
+        const uniqueGuests = new Set(guestKeys).size;
+        const repeatGuests = guestKeys.filter(k => {
+            const allStays = bookings.filter(bk => bk.status!=='cancellata' && guestKey(bk.surname,bk.name)===k);
+            return allStays.length > 1;
+        }).length;
+
+        // Periodo con più prenotazioni
+        const monthCount = {};
+        validBk.forEach(b => { const m = (b.start||'').slice(0,7); monthCount[m]=(monthCount[m]||0)+1; });
+        const topMonth = Object.entries(monthCount).sort((a,b)=>b[1]-a[1])[0];
+        const monthNames = ['','Gen','Feb','Mar','Apr','Mag','Giu','Lug','Ago','Set','Ott','Nov','Dic'];
+        const topMonthLabel = topMonth ? monthNames[parseInt(topMonth[0].slice(5))] + ' ' + topMonth[0].slice(0,4) : '—';
+
+        // HTML report
+        const appOccRows = Object.values(appOcc).map(a => {
+            const pct = seasonDays > 0 ? Math.round(a.nights/seasonDays*100) : 0;
+            const bar = `<div style="background:#eee;border-radius:4px;height:8px;width:100%;margin-top:2px;"><div style="background:var(--accent);height:8px;border-radius:4px;width:${Math.min(pct,100)}%;"></div></div>`;
+            return `<div style="margin-bottom:6px;"><b>${escHtml(a.name)}</b>: ${a.nights} notti (${pct}%)${bar}</div>`;
+        }).join('');
+
+        const channelRows = Object.entries(channels).sort((a,b)=>b[1]-a[1]).map(([ch,n]) =>
+            `<span style="background:#eaf4fb;padding:2px 8px;border-radius:10px;margin:2px;display:inline-block;">${escHtml(ch)}: <b>${n}</b></span>`
+        ).join('');
+
+        document.getElementById('season-report-content').innerHTML = `
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:16px;">
+                <div style="background:#eafaf1;padding:12px;border-radius:8px;text-align:center;"><div style="font-size:1.5rem;font-weight:bold;color:#27ae60;">${validBk.length}</div><div style="font-size:0.82rem;color:#555;">Prenotazioni</div></div>
+                <div style="background:#eaf4fb;padding:12px;border-radius:8px;text-align:center;"><div style="font-size:1.5rem;font-weight:bold;color:#2980b9;">${uniqueGuests}</div><div style="font-size:0.82rem;color:#555;">Ospiti unici</div></div>
+                <div style="background:#fef9e7;padding:12px;border-radius:8px;text-align:center;"><div style="font-size:1.5rem;font-weight:bold;color:#d4ac0d;">${totalNights}</div><div style="font-size:0.82rem;color:#555;">Notti totali</div></div>
+                <div style="background:#fdedec;padding:12px;border-radius:8px;text-align:center;"><div style="font-size:1.5rem;font-weight:bold;color:#e74c3c;">€${totalRevenue.toFixed(0)}</div><div style="font-size:0.82rem;color:#555;">Fatturato</div></div>
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;font-size:0.88rem;">
+                <div><b>Media notti/soggiorno:</b> ${avgNights}</div>
+                <div><b>Scontrino medio:</b> €${avgRevenue}</div>
+                <div><b>Ospiti abituali:</b> ${repeatGuests} su ${uniqueGuests}</div>
+                <div><b>Mese più affollato:</b> ${topMonthLabel} (${topMonth?topMonth[1]:0} pren.)</div>
+                <div><b>Canale principale:</b> ${topChannel?topChannel[0]:'-'} (${topChannel?topChannel[1]:0})</div>
+            </div>
+            <div style="margin-bottom:12px;"><b>Occupazione per appartamento</b> (su ${seasonDays} giorni stagione):<div style="margin-top:8px;">${appOccRows}</div></div>
+            <div><b>Prenotazioni per canale:</b><div style="margin-top:6px;">${channelRows}</div></div>
+        `;
+        document.getElementById('season-report-modal').style.display = 'flex';
+    }
+
+    function exportSeasonReportPDF() {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF();
+        const selYear = document.getElementById('filter-report-year')?.value || new Date().getFullYear().toString();
+        doc.setFontSize(18); doc.setTextColor(44,62,80);
+        doc.text(`Report Fine Stagione ${selYear}`, 105, 20, null, null, 'center');
+        doc.setFontSize(10); doc.setTextColor(100,100,100);
+        doc.text(`Generato il ${new Date().toLocaleDateString('it-IT')}`, 105, 28, null, null, 'center');
+        // Copia il testo dal modal già renderizzato
+        const el = document.getElementById('season-report-content');
+        doc.setFontSize(10); doc.setTextColor(50,50,50);
+        const lines = el.innerText.split('\n').filter(l=>l.trim());
+        let y = 40;
+        lines.forEach(line => {
+            if (y > 270) { doc.addPage(); y = 20; }
+            const wrapped = doc.splitTextToSize(line.trim(), 170);
+            doc.text(wrapped, 20, y);
+            y += wrapped.length * 6 + 1;
+        });
+        doc.save(`report_stagione_${selYear}.pdf`);
+    }
+
+    // PDF MIGLIORATO: Ricevuta di Soggiorno
+    function generateReceiptPDF() {
+        const { jsPDF } = window.jspdf; const doc = new jsPDF();
+        const id = parseInt(document.getElementById('md-id').value); const b = bookings.find(x => x.id === id); if(!b) return;
+        const app = apps.find(a => a.id === b.appId);
+        
+        doc.setFontSize(22);
+        doc.setTextColor(44, 62, 80);
+        doc.text("RICEVUTA DI SOGGIORNO", 105, 25, null, null, "center");
+        
+        doc.setFontSize(11);
+        doc.setTextColor(100, 100, 100);
+        doc.text(`Data di emissione: ${new Date().toLocaleDateString('it-IT')}`, 20, 35);
+        doc.text(`Cod. Riferimento Prenotazione: #${b.id}`, 20, 42);
+        
+        doc.setDrawColor(200, 200, 200);
+        doc.line(20, 48, 190, 48);
+        
+        doc.setFontSize(12);
+        doc.setTextColor(50, 50, 50);
+        doc.text("Dati Ospite", 20, 58);
+        doc.setFont("helvetica", "bold");
+        const nameLines = doc.splitTextToSize(`${b.name} ${b.surname}`, 160);
+        doc.text(nameLines, 20, 65);
+        let yGuest = 65 + (nameLines.length - 1) * 6;
+        doc.setFont("helvetica", "normal");
+        if(b.address) {
+            yGuest += 7;
+            const addrLines = doc.splitTextToSize(`${b.address}`, 160);
+            doc.text(addrLines, 20, yGuest);
+            yGuest += (addrLines.length - 1) * 5;
+        }
+        if(b.docType && b.docNum) {
+            yGuest += 7;
+            doc.text(`${b.docType}: ${b.docNum}`, 20, yGuest);
+        }
+        
+        doc.line(20, Math.max(yGuest + 8, 85), 190, Math.max(yGuest + 8, 85));
+        
+        const yDetails = Math.max(yGuest + 18, 95);
+        doc.text("Dettagli Soggiorno", 20, yDetails);
+        doc.text(`Struttura:`, 20, yDetails+10); doc.setFont("helvetica", "bold"); doc.text(`${app ? app.name : 'N/D'}`, 60, yDetails+10); doc.setFont("helvetica", "normal");
+        doc.text(`Periodo:`, 20, yDetails+20); doc.setFont("helvetica", "bold"); doc.text(`dal ${formatIT(b.start)} al ${formatIT(b.end)}`, 60, yDetails+20); doc.setFont("helvetica", "normal");
+        doc.text(`Ospiti:`, 20, yDetails+30); doc.setFont("helvetica", "bold"); doc.text(`${b.adults} adulti${b.minors>0?', '+b.minors+' minori (esenti tassa)':''}`, 60, yDetails+30); doc.setFont("helvetica", "normal");
+
+        doc.line(20, yDetails+38, 190, yDetails+38);
+        
+        let yPos = yDetails + 50;
+        doc.text("Riepilogo Costi", 20, yPos); yPos += 10;
+        
+        const stayCost = b.totalPrice - (b.linen || 0);
+        doc.text(`Costo Soggiorno:`, 20, yPos); doc.text(`Euro ${stayCost.toFixed(2)}`, 150, yPos, null, null, "right"); yPos += 10;
+        if(b.linen > 0) { doc.text(`Servizi Extra:`, 20, yPos); doc.text(`Euro ${(b.linen || 0).toFixed(2)}`, 150, yPos, null, null, "right"); yPos += 10; }
+        doc.text(`Tassa di Soggiorno:`, 20, yPos); doc.text(`Euro ${(b.tax || 0).toFixed(2)}`, 150, yPos, null, null, "right"); yPos += 10;
+        
+        doc.line(20, yPos, 190, yPos); yPos += 10;
+        
+        const totalAmount = b.totalPrice; // tassa gestita separatamente, non entra nei pagamenti
+        const deposit = b.deposit || 0;
+        const balancePaid = b.balancePaid || 0;
+        const totPaid = deposit + balancePaid;
+        const balance = totalAmount - totPaid;
+
+        if (totPaid > 0) {
+            doc.text(`Totale Soggiorno (esclusa tassa):`, 20, yPos); doc.text(`Euro ${totalAmount.toFixed(2)}`, 185, yPos, null, null, "right"); yPos += 10;
+            if (deposit > 0) {
+                doc.text(`Caparra Versata${b.depositMethod ? ` (${b.depositMethod})` : ''}:`, 20, yPos); doc.text(`- Euro ${deposit.toFixed(2)}`, 185, yPos, null, null, "right"); yPos += 10;
+            }
+            if (balancePaid > 0) {
+                doc.text(`Saldo Versato${b.balanceMethod ? ` (${b.balanceMethod})` : ''}:`, 20, yPos); doc.text(`- Euro ${balancePaid.toFixed(2)}`, 185, yPos, null, null, "right"); yPos += 10;
+            }
+        }
+
+        doc.setFillColor(245, 245, 245);
+        doc.rect(20, yPos - 5, 170, 15, 'F');
+        doc.setFontSize(14);
+        doc.setFont("helvetica", "bold");
+        
+        if (balance <= 0) {
+            doc.setTextColor(39, 174, 96);
+            doc.text(`INTERAMENTE SALDATO`, 25, yPos + 5);
+            doc.text(`Euro 0.00`, 185, yPos + 5, null, null, "right");
+        } else {
+            doc.setTextColor(50, 50, 50);
+            if (totPaid > 0) doc.text(`SALDO RIMANENTE:`, 25, yPos + 5);
+            else doc.text(`TOTALE DA SALDARE:`, 25, yPos + 5);
+            doc.text(`Euro ${balance.toFixed(2)}`, 185, yPos + 5, null, null, "right");
+        }
+        doc.setTextColor(50, 50, 50);
+        
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(150, 150, 150);
+        doc.text(`Documento generato da Gestore Affitti Brevi PRO. Documento non valevole a fini fiscali senza idonea ricevuta telematica.`, 105, 280, null, null, "center");
+
+        doc.save(`Ricevuta_${b.surname}_${b.start}.pdf`);
+    }
+
+    // PDF MIGLIORATO: Riepilogo Contabile
+    function generateAccountingPDF() {
+        const { jsPDF } = window.jspdf; const doc = new jsPDF();
+        
+        doc.setFontSize(22);
+        doc.setTextColor(44, 62, 80);
+        doc.text("RIEPILOGO CONTABILE", 105, 25, null, null, "center");
+        
+        const selYear = document.getElementById('filter-report-year')?.value || 'Tutti';
+        const selAppEl = document.getElementById('filter-report-app');
+        const selAppName = selAppEl.options[selAppEl.selectedIndex].text;
+        
+        doc.setFontSize(11);
+        doc.setTextColor(100, 100, 100);
+        doc.text(`Data Generazione: ${new Date().toLocaleDateString('it-IT')}`, 20, 35);
+        doc.text(`Anno di riferimento: ${selYear}`, 20, 42);
+        doc.text(`Struttura filtrata: ${selAppName}`, 20, 49);
+        
+        doc.setDrawColor(200, 200, 200);
+        doc.line(20, 55, 190, 55);
+
+        const revText = document.getElementById('total-revenue').innerText;
+        const expText = document.getElementById('total-expenses').innerText;
+        const netText = document.getElementById('total-net').innerText;
+        const taxText = document.getElementById('total-tax-fund').innerText;
+
+        doc.setFontSize(12);
+        doc.setTextColor(50, 50, 50);
+        
+        doc.text(`Totale Entrate (Lorde):`, 20, 70); 
+        doc.setFont("helvetica", "bold"); doc.setTextColor(39, 174, 96); doc.text(revText, 150, 70, null, null, "right"); doc.setFont("helvetica", "normal"); doc.setTextColor(50, 50, 50);
+        
+        doc.text(`Totale Uscite (Spese registrate):`, 20, 80); 
+        doc.setFont("helvetica", "bold"); doc.setTextColor(231, 76, 60); doc.text(expText, 150, 80, null, null, "right"); doc.setFont("helvetica", "normal"); doc.setTextColor(50, 50, 50);
+        
+        doc.text(`Fondo Tassa di Soggiorno (da versare):`, 20, 90); 
+        doc.setFont("helvetica", "bold"); doc.setTextColor(241, 196, 15); doc.text(taxText, 150, 90, null, null, "right"); doc.setFont("helvetica", "normal"); doc.setTextColor(50, 50, 50);
+        
+        doc.line(20, 100, 190, 100);
+        
+        doc.setFillColor(245, 245, 245);
+        doc.rect(20, 105, 170, 15, 'F');
+        doc.setFontSize(14);
+        doc.setFont("helvetica", "bold");
+        doc.text(`UTILE NETTO CALCOLATO:`, 25, 115);
+        doc.setTextColor(41, 128, 185);
+        doc.text(netText, 185, 115, null, null, "right");
+        
+        // ── Tabella riepilogativa prenotazioni ──────────────────
+        doc.addPage();
+        doc.setFontSize(14);
+        doc.setFont("helvetica", "bold");
+        doc.setTextColor(44, 62, 80);
+        doc.text("Dettaglio Prenotazioni", 20, 20);
+        doc.setFontSize(9);
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(100, 100, 100);
+        doc.text(`Anno ${selYear} – ${selAppName}`, 20, 28);
+
+        // Intestazioni tabella
+        const cols = [20, 55, 100, 128, 148, 168];
+        const colLabels = ['Ospite', 'Appartamento', 'Check-in', 'Check-out', 'Totale €', 'Residuo €'];
+        let yT = 38;
+        doc.setFillColor(44, 62, 80);
+        doc.rect(18, yT - 5, 174, 8, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFont("helvetica", "bold");
+        colLabels.forEach((label, i) => doc.text(label, cols[i], yT));
+        yT += 6;
+        doc.setFont("helvetica", "normal");
+        doc.setTextColor(50, 50, 50);
+
+        // Filtra le stesse prenotazioni del report
+        let pdfBk = bookings.filter(b => b.status !== 'cancellata' && b.start?.slice(0,4) === selYear);
+        if (selYear !== 'Tutti' && document.getElementById('filter-report-app')?.value !== 'all') {
+            const appId = parseInt(document.getElementById('filter-report-app').value);
+            pdfBk = pdfBk.filter(b => b.appId === appId);
+        }
+        pdfBk.sort((a,b) => (a.start||'').localeCompare(b.start||''));
+
+        let grandTotal = 0, grandResiduo = 0;
+        pdfBk.forEach((b, idx) => {
+            if (yT > 270) { doc.addPage(); yT = 20; }
+            if (idx % 2 === 0) { doc.setFillColor(248, 249, 250); doc.rect(18, yT - 4, 174, 7, 'F'); }
+            const appN = apps.find(a => a.id === b.appId)?.name || '?';
+            const paid = (b.deposit||0) + (b.balancePaid||0);
+            const residuo = Math.max(0, (b.totalPrice||0) - paid);
+            grandTotal   += b.totalPrice || 0;
+            grandResiduo += residuo;
+            const ospite = `${b.surname||''} ${b.name||''}`.trim().substring(0, 18);
+            const appStr = appN.substring(0, 18);
+            doc.text(ospite,                cols[0], yT);
+            doc.text(appStr,                cols[1], yT);
+            doc.text(formatIT(b.start),     cols[2], yT);
+            doc.text(formatIT(b.end),       cols[3], yT);
+            doc.text(`${(b.totalPrice||0).toFixed(2)}`, cols[4], yT);
+            if (residuo > 0) { doc.setTextColor(192, 57, 43); }
+            doc.text(`${residuo.toFixed(2)}`, cols[5], yT);
+            doc.setTextColor(50, 50, 50);
+            yT += 7;
+        });
+
+        // Riga totali
+        doc.setDrawColor(200,200,200);
+        doc.line(18, yT, 192, yT); yT += 5;
+        doc.setFont("helvetica", "bold");
+        doc.text(`TOTALE (${pdfBk.length} prenotazioni):`, cols[0], yT);
+        doc.text(`${grandTotal.toFixed(2)}`, cols[4], yT);
+        doc.setTextColor(192, 57, 43);
+        doc.text(`${grandResiduo.toFixed(2)}`, cols[5], yT);
+
+        doc.save(`Riepilogo_Contabile_${selYear}_${selAppName.replace(/ /g,'_')}.pdf`);
+    }
+
+    function renderSettings() {
+        // Info backup emergenza
+        const emergInfo = document.getElementById('emergency-backup-info');
+        if (emergInfo) {
+            const snap = localStorage.getItem(LS.emergencyBackup);
+            if (snap) {
+                try {
+                    const d = JSON.parse(snap);
+                    const when = d._savedAt ? new Date(d._savedAt).toLocaleString('it-IT') : '—';
+                    const cnt  = d._saveCount || '?';
+                    emergInfo.innerHTML = `💾 Ultimo backup di emergenza: <b>${when}</b> (dopo ${cnt} modifiche)`;
+                } catch(e) { emergInfo.textContent = '⚠️ Backup di emergenza presente ma non leggibile.'; }
+            } else {
+                emergInfo.textContent = 'Nessun backup di emergenza ancora disponibile (si crea ogni 5 modifiche).';
+            }
+        }
+        document.getElementById('set-tax-rate').value = settings.taxRate;
+        document.getElementById('set-tax-max').value = settings.maxTaxNights;
+        document.getElementById('set-linen-price').value = settings.linenPrice;
+        document.getElementById('set-maps-link').value    = settings.mapsLink    || '';
+        document.getElementById('set-firma').value         = settings.firma        || '';
+        document.getElementById('set-sconto').value        = settings.sconto       || 10;
+        document.getElementById('set-season-start').value  = settings.seasonStart  || '06-01';
+        document.getElementById('set-season-end').value    = settings.seasonEnd    || '09-30';
+
+        
+        // Tabella Appartamenti
+        const appBody = document.querySelector('#settings-apps-table tbody'); appBody.innerHTML = '';
+        apps.forEach((a, i) => { 
+            appBody.innerHTML += `<tr><td>${a.id}</td><td><input id="app-n-${i}" value="${escHtml(a.name)}"></td><td><input id="app-b-${i}" type="number" value="${a.beds}" style="width:60px;"></td><td><input id="app-notes-${i}" value="${escHtml(a.notes||'')}" placeholder="Es. Piano terra, WiFi..." style="font-size:0.85rem;"></td><td><button onclick="safeDeleteApp(${i})" class="btn btn-danger">X</button></td></tr>`; 
+        });
+
+        // Tabella Tariffe
+        const rateBody = document.querySelector('#settings-rates-table tbody'); rateBody.innerHTML = '';
+        rates.forEach((r, i) => {
+            let appOpts = `<option value="0" ${r.appId===0?'selected':''}>Tutti</option>`;
+            apps.forEach(a => { appOpts += `<option value="${a.id}" ${r.appId===a.id?'selected':''}>${escHtml(a.name)}</option>`; });
+            rateBody.innerHTML += `<tr>
+                <td><input id="rate-n-${i}" value="${escHtml(r.name)}" class="rate-input-name"></td>
+                <td><select id="rate-a-${i}" class="rate-input-app">${appOpts}</select></td>
+                <td><input type="date" id="rate-s-${i}" value="${r.start}" class="rate-input-date"></td>
+                <td><input type="date" id="rate-e-${i}" value="${r.end}" class="rate-input-date"></td>
+                <td><input type="number" id="rate-d-${i}" value="${r.daily}" class="rate-input-price" placeholder="€/g"></td>
+                <td><input type="number" id="rate-w-${i}" value="${r.weekly}" class="rate-input-price" placeholder="€/sett."></td>
+                <td><button onclick="rates.splice(${i},1);renderSettings();markAsModified();" class="btn btn-danger" style="padding:2px 5px">X</button></td>
+            </tr>`;
+        });
+    }
+
+    function saveSettings() {
+        settings.taxRate = parseFloat(document.getElementById('set-tax-rate').value);
+        settings.maxTaxNights = parseInt(document.getElementById('set-tax-max').value);
+        settings.linenPrice = parseFloat(document.getElementById('set-linen-price').value);
+        settings.mapsLink    = document.getElementById('set-maps-link').value;
+        const rawStart = document.getElementById('set-season-start').value.trim();
+        const rawEnd   = document.getElementById('set-season-end').value.trim();
+        if(/^\d{2}-\d{2}$/.test(rawStart)) settings.seasonStart = rawStart;
+        else if(rawStart) { showToast('Formato data stagione non valido (usa gg-mm)','error'); return; }
+        if(/^\d{2}-\d{2}$/.test(rawEnd))   settings.seasonEnd   = rawEnd;
+        else if(rawEnd)   { showToast('Formato data stagione non valido (usa gg-mm)','error'); return; }
+
+        // Controlla che inizio < fine stagione
+        if(settings.seasonStart && settings.seasonEnd) {
+            const [sm, sd] = settings.seasonStart.split('-').map(Number);
+            const [em, ed] = settings.seasonEnd.split('-').map(Number);
+            if(sm > em || (sm === em && sd >= ed)) {
+                showToast('Data inizio stagione deve essere prima della fine','error'); return;
+            }
+        }
+        localStorage.setItem(LS.settings, JSON.stringify(settings));
+        showToast('Impostazioni salvate!');
+        markAsModified(); // Segnala che serve un backup
+    }
+
+    function safeDeleteApp(i) {
+        const app = apps[i];
+        if (!app) return;
+        const activeBookings = bookings.filter(b =>
+            b.appId === app.id && b.status !== 'cancellata'
+        );
+        if (activeBookings.length > 0) {
+            const names = activeBookings.slice(0,5)
+                .map(b => `• ${b.surname} ${b.name} (${formatIT(b.start)} → ${formatIT(b.end)})`)
+                .join('\n');
+            const more = activeBookings.length > 5 ? `\n… e altre ${activeBookings.length-5}` : '';
+            alert(`Impossibile eliminare "${app.name}":\nci sono ${activeBookings.length} prenotazioni attive associate:\n\n${names}${more}\n\nAnnulla o cancella prima le prenotazioni.`);
+            return;
+        }
+        const cancelled = bookings.filter(b => b.appId === app.id && b.status === 'cancellata');
+        let msg = `Eliminare "${app.name}"?`;
+        if (cancelled.length > 0) msg += `\n(${cancelled.length} prenotazioni cancellate rimarranno nello storico con appartamento "?")`;
+        if (!confirm(msg)) return;
+        apps.splice(i, 1);
+        renderSettings();
+        markAsModified();
+    }
+
+    function addAppRow() { apps.push({id: Date.now(), name:"Nuovo", beds:2, notes:""}); renderSettings(); }
+    
+    function saveApps() {
+        apps.forEach((a,i) => { 
+            a.name  = document.getElementById(`app-n-${i}`).value; 
+            a.beds  = parseInt(document.getElementById(`app-b-${i}`).value);
+            a.notes = document.getElementById(`app-notes-${i}`)?.value || '';
+        });
+        localStorage.setItem(LS.apps, JSON.stringify(apps)); updateSelects(); showToast('Appartamenti salvati!');
+        markAsModified(); // Segnala che serve un backup
+    }
+
+    function addRateRow() {
+        rates.push({id: Date.now(), appId: 0, name: "Nuova Tariffa", start: "", end: "", daily: 50, weekly: 300});
+        renderSettings();
+    }
+
+    function saveRates() {
+        const errors = [];
+        rates.forEach((r, i) => {
+            r.name  = document.getElementById(`rate-n-${i}`).value.trim();
+            r.appId = parseInt(document.getElementById(`rate-a-${i}`).value);
+            r.start = document.getElementById(`rate-s-${i}`).value;
+            r.end   = document.getElementById(`rate-e-${i}`).value;
+            r.daily  = parseFloat(document.getElementById(`rate-d-${i}`).value) || 0;
+            r.weekly = parseFloat(document.getElementById(`rate-w-${i}`).value) || 0;
+            // Validazioni
+            if (!r.name) errors.push(`Riga ${i+1}: nome tariffa mancante.`);
+            if (!r.start || !r.end) errors.push(`Riga ${i+1} (${r.name||'?'}): date di inizio/fine mancanti.`);
+            else if (r.start > r.end) errors.push(`Riga ${i+1} (${r.name||'?'}): la data di inizio è successiva alla data di fine.`);
+            if (r.daily <= 0 && r.weekly <= 0) errors.push(`Riga ${i+1} (${r.name||'?'}): inserire almeno un prezzo giornaliero o settimanale > 0.`);
+        });
+        if (errors.length > 0) {
+            alert('⚠️ Errori nelle tariffe:\n\n' + errors.join('\n'));
+            return;
+        }
+        localStorage.setItem(LS.rates, JSON.stringify(rates));
+        showToast('Tariffe salvate!');
+        markAsModified();
+    }
+
+    function saveMessaggiSettings() {
+        settings.firma = document.getElementById('set-firma').value;
+        settings.sconto = parseInt(document.getElementById('set-sconto').value);
+        localStorage.setItem(LS.settings, JSON.stringify(settings));
+        showToast('Impostazioni messaggi salvate!');
+        markAsModified(); // Segnala che serve un backup
+    }
+
+    async function backupData() {
+        if (isBackingUp) return; // Blocco anti-doppio click
+        isBackingUp = true;
+        
+        const dataStr = JSON.stringify({apps,rates,settings,bookings,expenses,guests}, null, 2);
+        const today = new Date();
+        const yyyy = today.getFullYear();
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        const dd = String(today.getDate()).padStart(2, '0');
+        const hh = String(today.getHours()).padStart(2, '0');
+        const min = String(today.getMinutes()).padStart(2, '0');
+        
+        // Modificato in formato data italiano (DD-MM-YYYY)
+        const fileName = `backup_pms_${dd}-${mm}-${yyyy}_${hh}${min}.json`;
+
+        try {
+            // TENTATIVO 1: API Moderna File System (chiede dove salvare con finestra nativa di sistema)
+            if (window.showSaveFilePicker) {
+                const handle = await window.showSaveFilePicker({
+                    suggestedName: fileName,
+                    types: [{ description: 'Backup PMS', accept: {'application/json': ['.json']} }]
+                });
+                const writable = await handle.createWritable();
+                await writable.write(dataStr);
+                await writable.close();
+                
+                localStorage.setItem(LS.lastBackup, Date.now().toString());
+                needsBackup = false;
+                showToast('Backup salvato con successo!');
+                setTimeout(() => { isBackingUp = false; }, 500);
+                return;
+            }
+        } catch (err) {
+            if (err.name === 'AbortError') {
+                isBackingUp = false; return; // L'utente ha premuto Annulla nella finestra
+            }
+            console.warn("File System API non supportata, passo al metodo classico...");
+        }
+
+        // TENTATIVO 2: Metodo classico di download (fallback automatico)
+        try {
+            const blob = new Blob([dataStr], {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); 
+            a.href = url;
+            a.download = fileName; 
+            a.style.display = 'none'; 
+            document.body.appendChild(a);
+            
+            if (document.createEvent) {
+                const event = document.createEvent('MouseEvents');
+                event.initEvent('click', true, true);
+                a.dispatchEvent(event);
+            } else {
+                a.click();
+            }
+            
+            document.body.removeChild(a);
+            setTimeout(() => { window.URL.revokeObjectURL(url); }, 200);
+            
+            localStorage.setItem(LS.lastBackup, Date.now().toString());
+            needsBackup = false;
+            showToast('Backup scaricato correttamente!');
+        } catch (error) {
+            console.error("Errore backup:", error);
+            alert("Download bloccato dal browser. Se sei nella finestra di anteprima qui accanto, DEVI salvare il codice sul tuo PC aprendolo con Chrome o Edge per far funzionare i download.");
+        } finally {
+            setTimeout(() => { isBackingUp = false; }, 1000);
+        }
+    }
+
+    function restoreData(e) {
+        const reader = new FileReader();
+        reader.onload = function(ev) {
+            try {
+                const data=JSON.parse(ev.target.result);
+                if(!data || !Array.isArray(data.apps) || !Array.isArray(data.bookings)){
+                    alert('Backup non valido o incompatibile.');
+                    return;
+                }
+                localStorage.setItem(LS.apps, JSON.stringify(data.apps));
+                localStorage.setItem(LS.bookings, JSON.stringify(data.bookings));
+            // Ripristino esteso
+            if(data.rates) localStorage.setItem(LS.rates, JSON.stringify(data.rates));
+            if(data.settings) localStorage.setItem(LS.settings, JSON.stringify(data.settings));
+            if(data.expenses) localStorage.setItem(LS.expenses, JSON.stringify(data.expenses));
+            if(data.guests) localStorage.setItem(LS.guests, JSON.stringify(data.guests));
+            location.reload();
+            } catch(err) {
+                alert('Errore durante il ripristino del backup.');
+            }
+        };
+        reader.onerror = function() { alert('Impossibile leggere il file. Riprova.'); };
+        reader.readAsText(e.target.files[0]);
+    }
+    
+    function factoryReset() {
+        if(confirm("ATTENZIONE: Stai per cancellare TUTTI i dati (prenotazioni, spese, rubrica, impostazioni). L'operazione è IRREVERSIBILE. Vuoi procedere?")) {
+            if(confirm("Sei veramente sicuro? Assicurati di aver fatto prima un backup dal pulsante 'Esporta Backup'.")) {
+                Object.values(LS).forEach(k => localStorage.removeItem(k));
+                alert("Dati resettati con successo. L'applicazione verrà ricaricata.");
+                needsBackup = false; // per evitare che parta l'avviso di chiusura mentre ricarica
+                location.reload();
+            }
+        }
+    }
+
+    function updateSelects(){
+        const ba=document.getElementById('b-app');
+        const ea=document.getElementById('e-app');
+        ba.innerHTML=''; ea.innerHTML='<option value="0">Generale</option>';
+        apps.forEach(a=>{ ba.add(new Option(a.name,a.id)); ea.add(new Option(a.name,a.id)); });
+    }
+
+    // ── RUBRICA E WHATSAPP RICONTATTO ─────────────────────────────
+    function guestKey(surname, name) { return (surname||'').trim().toLowerCase() + '|' + (name||'').trim().toLowerCase(); }
+
+    function upsertGuest(b) {
+        const key = guestKey(b.surname, b.name);
+        if(!key || key === '|') return;
+        // Aggiorna solo i campi non vuoti, preservando dati esistenti
+        const existing = guests[key] || {};
+        guests[key] = {
+            key,
+            surname: b.surname || existing.surname,
+            name:    b.name    || existing.name,
+            tel:     b.tel     || existing.tel,
+            mail:    b.mail    || existing.mail,
+            address: b.address || existing.address,
+            docType: b.docType || existing.docType,
+            docNum:  b.docNum  || existing.docNum
+        };
+        localStorage.setItem(LS.guests, JSON.stringify(guests));
+    }
+
+    function guestAutocomplete(val) {
+        const box = document.getElementById('guest-suggestions');
+        box.innerHTML = '';
+        if(!val || val.length < 2) return;
+        const matches = Object.values(guests).filter(g => (g.surname||'').toLowerCase().includes(val.toLowerCase()) || (g.name||'').toLowerCase().includes(val.toLowerCase())).slice(0, 5);
+        matches.forEach(g => {
+            const div = document.createElement('div');
+            div.className = 'autocomplete-item';
+            div.textContent = `${g.surname} ${g.name}`;
+            div.onclick = () => {
+                document.getElementById('b-surname').value = g.surname || '';
+                document.getElementById('b-name').value = g.name || '';
+                document.getElementById('b-tel').value = g.tel || '';
+                document.getElementById('b-mail').value = g.mail || '';
+                document.getElementById('b-address').value = g.address || '';
+                if(g.docType) document.getElementById('b-doc-type').value = g.docType;
+                document.getElementById('b-doc-num').value = g.docNum || '';
+                
+                const banner = document.getElementById('guest-loaded-banner');
+                if(banner) {
+                    banner.style.display = 'block';
+                    setTimeout(() => { banner.style.display = 'none'; }, 5000);
+                }
+                
+                box.innerHTML = '';
+            };
+            box.appendChild(div);
+        });
+    }
+
+    function renderRubrica() {
+        const grid = document.getElementById('rubrica-grid');
+        const statsBox = document.getElementById('rubrica-stats');
+        grid.innerHTML = '';
+        
+        const searchTerm = (document.getElementById('rubrica-search')?.value || '').toLowerCase();
+        let filteredGuests = Object.values(guests);
+        
+        if (searchTerm) {
+            filteredGuests = filteredGuests.filter(g => 
+                (g.surname || '').toLowerCase().includes(searchTerm) || 
+                (g.name || '').toLowerCase().includes(searchTerm)
+            );
+        }
+        
+        if(statsBox){
+            const allGuests = Object.values(guests);
+            const habitual = allGuests.filter(g => {
+                const cnt = bookings.filter(b => b.status !== 'cancellata' && guestKey(b.surname,b.name) === g.key).length;
+                return cnt >= 2;
+            }).length;
+            const totalSpentAll = allGuests.reduce((sum, g) => {
+                return sum + bookings.filter(b => b.status !== 'cancellata' && guestKey(b.surname,b.name) === g.key)
+                    .reduce((s,b) => s + (parseFloat(b.totalPrice)||0), 0);
+            }, 0);
+            statsBox.innerHTML = `
+                <div style="background:#eaf4fb; padding:8px 14px; border-radius:6px; font-size:0.88rem;">
+                    👥 <b>${allGuests.length}</b> ospiti totali
+                </div>
+                <div style="background:#eafaf1; padding:8px 14px; border-radius:6px; font-size:0.88rem;">
+                    🔁 <b>${habitual}</b> ospiti abituali (2+ soggiorni)
+                </div>
+                <div style="background:#fef9e7; padding:8px 14px; border-radius:6px; font-size:0.88rem;">
+                    💰 Fatturato totale ospiti: <b>€${totalSpentAll.toFixed(2)}</b>
+                </div>
+                ${searchTerm ? `<div style="background:#f8f9fa; padding:8px 14px; border-radius:6px; font-size:0.88rem;">🔍 Trovati: <b>${filteredGuests.length}</b></div>` : ''}
+            `;
+        }
+
+        if (filteredGuests.length === 0) {
+            grid.innerHTML = '<div style="grid-column: 1 / -1; text-align: center; color: #888; padding: 20px;">Nessun ospite trovato con questo nome.</div>';
+            return;
+        }
+
+        filteredGuests.forEach(g => {
+            const tel = g.tel ? escHtml(g.tel) : '<span style="color:#aaa;">-</span>';
+            const mail = g.mail ? escHtml(g.mail) : '<span style="color:#aaa;">-</span>';
+            const address = g.address ? escHtml(g.address) : '<span style="color:#aaa;">-</span>';
+            const docInfo = (g.docType || g.docNum) ? `${escHtml(g.docType || '')} ${escHtml(g.docNum || '')}`.trim() : '<span style="color:#aaa;">-</span>';
+            const guestBookings = bookings.filter(b => guestKey(b.surname,b.name)===g.key);
+            const stays = guestBookings.length;
+            const totalSpent = guestBookings.reduce((s,b)=>s+(parseFloat(b.totalPrice || b.total)||0),0);
+            const lastStay = guestBookings.sort((a,b)=>String(b.start).localeCompare(String(a.start)))[0];
+
+            grid.innerHTML += `
+            <div class="guest-card">
+                <div class="guest-card-header">
+                    <span class="guest-card-name">${escHtml(g.surname)} ${escHtml(g.name)}</span>
+                </div>
+                <div class="guest-card-detail"><b>Tel:</b> ${tel}</div>
+                <div class="guest-card-detail"><b>Email:</b> ${mail}</div>
+                <div class="guest-card-detail"><b>Indirizzo:</b> ${address}</div>
+                <div class="guest-card-detail"><b>Soggiorni:</b> ${stays}</div>
+                <div class="guest-card-detail"><b>Ultima visita:</b> ${lastStay ? formatIT(lastStay.start) : '-'}</div>
+                <div class="guest-card-detail"><b>Spesa totale:</b> € ${totalSpent.toFixed(2)}</div>
+                <div class="guest-card-detail"><b>Documento:</b> ${docInfo}</div>
+                <button onclick="newBookingFromRubrica('${g.key}')" class="btn btn-success" style="width:100%; padding:8px; margin-top:10px; font-size:0.85rem;">+ Nuova Prenotazione</button>
+            </div>`;
+        });
+    }
+
+    function newBookingFromRubrica(key) {
+        const g = guests[key];
+        if (!g) return;
+        
+        showTab('prenotazioni');
+        cancelEdit(); // Assicura che il form sia pulito
+        
+        document.getElementById('b-surname').value = g.surname || '';
+        document.getElementById('b-name').value = g.name || '';
+        document.getElementById('b-tel').value = g.tel || '';
+        document.getElementById('b-mail').value = g.mail || '';
+        document.getElementById('b-address').value = g.address || '';
+        if(g.docType) document.getElementById('b-doc-type').value = g.docType;
+        document.getElementById('b-doc-num').value = g.docNum || '';
+        
+        document.getElementById('form-title').innerText = "Nuova Prenotazione (da Rubrica)";
+        document.getElementById('prenotazioni').scrollIntoView({behavior: 'smooth'});
+        showToast('Dati ospite precompilati!');
+    }
+
+    function populateWaYears() {
+        const sel = document.getElementById('wa-year');
+        if(!sel) return;
+        const years = new Set(bookings.map(b => b.start?.slice(0,4)).filter(Boolean));
+        sel.innerHTML = '';
+        [...years].sort().reverse().forEach(y => sel.add(new Option(y, y)));
+    }
+    
+    let currentWaPreview = { tel: '', text: '' };
+
+    function buildRicontattoList() {
+        const year = document.getElementById('wa-year').value;
+        const sconto = document.getElementById('wa-sconto').value || settings.sconto || 10;
+        const resultsDiv = document.getElementById('wa-results');
+        
+        if(!year) {
+            showToast("Seleziona un anno valido.", "error");
+            return;
+        }
+
+        const targetBookings = bookings.filter(b => b.status !== 'cancellata' && b.start && b.start.slice(0,4) === year && b.tel);
+        
+        const uniqueGuests = {};
+        targetBookings.forEach(b => {
+            const key = guestKey(b.surname, b.name);
+            if(!uniqueGuests[key]) uniqueGuests[key] = b;
+        });
+
+        const guestsList = Object.values(uniqueGuests);
+
+        if(guestsList.length === 0) {
+            resultsDiv.innerHTML = `<p style="color:var(--danger); font-weight:bold; margin-top:10px;">Nessun ospite trovato con numero di telefono per l'anno ${year}.</p>`;
+            return;
+        }
+
+        let html = `<h4 style="margin-bottom:10px; color:var(--dark);">Trovati ${guestsList.length} ospiti per il ${year}:</h4>`;
+        html += `<div style="display:flex; flex-direction:column; gap:10px;">`;
+        
+        guestsList.forEach(g => {
+            const rawTelG = (g.tel || '').trim();
+            const cleanTel = (rawTelG.startsWith('+') ? '+' : '') + rawTelG.replace(/[^\d]/g, '');
+            const safeSurname = escHtml(g.surname).replace(/'/g, "\\'");
+            const safeName = escHtml(g.name).replace(/'/g, "\\'");
+            
+            html += `
+            <div style="background:#f8f9fa; border:1px solid #ddd; padding:10px; border-radius:5px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+                <div>
+                    <strong style="color:var(--primary);">${escHtml(g.surname)} ${escHtml(g.name)}</strong><br>
+                    <span style="font-size:0.85rem; color:#666;">📱 ${escHtml(g.tel)}</span>
+                </div>
+                <button class="btn btn-whatsapp" style="padding:6px 12px; font-size:0.85rem; margin:0;" onclick="previewWaRicontatto('${safeSurname}', '${safeName}', '${cleanTel}', ${year}, ${sconto}, ${g.appId})">
+                    👁️ Anteprima Messaggio
+                </button>
+            </div>`;
+        });
+        
+        html += `</div>`;
+        resultsDiv.innerHTML = html;
+    }
+
+    function previewWaRicontatto(surname, name, tel, year, sconto, appId) {
+        const firma = settings.firma || "La Direzione";
+        
+        const app = apps.find(a => a.id === appId);
+        const appName = app ? app.name : "la nostra struttura";
+
+        let text = `Gentile ${name} ${surname},\n\nSperiamo stiate bene! L'anno scorso (${year}) siete stati nostri graditi ospiti e ci farebbe molto piacere riavervi con noi per le vostre vacanze.\n\nPer ringraziarvi della fiducia, abbiamo riservato per voi uno sconto speciale del ${sconto}% sulle nostre tariffe dirette per questa stagione.\n\n`;
+        
+        const appRates = rates.filter(r => r.appId === appId || r.appId === 0);
+        
+        if (appRates.length > 0) {
+            text += `Ecco le nostre tariffe per l'alloggio "${appName}":\n`;
+            appRates.forEach(r => {
+                const startIT = formatIT(r.start);
+                const endIT = formatIT(r.end);
+                text += `- Dal ${startIT} al ${endIT}: Giornaliero €${r.daily} | Settimanale €${r.weekly}\n`;
+            });
+            text += `\nI prezzi indicati sono DA SCONTARE del ${sconto}%!\n\n`;
+        }
+
+        text += `Se state iniziando a pianificare le vostre ferie, non esitate a contattarci per un preventivo senza impegno.\n\nUn caro saluto,\n${firma}`;
+        
+        currentWaPreview = { tel: tel, text: text };
+        
+        document.getElementById('wa-preview-guest').innerText = `Messaggio per: ${name} ${surname} (${tel})`;
+        document.getElementById('wa-preview-text').value = text;
+        document.getElementById('wa-preview-modal').style.display = 'flex';
+    }
+
+    function openGlobalSearch() {
+        const bar = document.getElementById('global-search-bar');
+        bar.style.display = 'block';
+        document.getElementById('global-search-input').focus();
+    }
+    function closeGlobalSearch() {
+        document.getElementById('global-search-bar').style.display = 'none';
+        document.getElementById('global-search-input').value = '';
+        document.getElementById('global-search-results').innerHTML = '';
+    }
+    function runGlobalSearch(q) {
+        const res = document.getElementById('global-search-results');
+        if (!q || q.length < 2) { res.innerHTML = ''; return; }
+        const ql = q.toLowerCase();
+        const hits = [];
+
+        // Prenotazioni
+        bookings.forEach(b => {
+            if([b.surname,b.name,b.tel,b.mail,b.notes,b.channel].some(f=>(f||'').toLowerCase().includes(ql))) {
+                const app = apps.find(a=>a.id===b.appId)?.name||'?';
+                hits.push(`<a onclick="closeGlobalSearch();showTab('prenotazioni');setTimeout(()=>{document.getElementById('filter-b-name').value='${escHtml(q)}';renderBookingList();},100);">
+                    🗓️ <b>${escHtml(b.surname)} ${escHtml(b.name)}</b> — ${app} (${formatIT(b.start)}→${formatIT(b.end)})</a>`);
+            }
+        });
+        // Ospiti in rubrica
+        Object.values(guests).forEach(g => {
+            if([(g.surname||''),(g.name||''),(g.tel||''),(g.mail||'')].some(f=>f.toLowerCase().includes(ql))) {
+                hits.push(`<a onclick="closeGlobalSearch();showTab('rubrica');setTimeout(()=>{document.getElementById('rubrica-search').value='${escHtml(q)}';renderRubrica();},100);">
+                    👤 <b>${escHtml(g.surname)} ${escHtml(g.name)}</b> — ${escHtml(g.tel||'')} ${escHtml(g.mail||'')}</a>`);
+            }
+        });
+        // Spese
+        expenses.forEach(e => {
+            if([(e.desc||''),(e.category||'')].some(f=>f.toLowerCase().includes(ql))) {
+                const app = e.appId===0?'Generale':apps.find(a=>a.id===e.appId)?.name||'?';
+                hits.push(`<a onclick="closeGlobalSearch();showTab('spese');">
+                    💶 <b>${escHtml(e.category)}</b> — ${escHtml(e.desc||'')} (${app}, €${(e.amount||0).toFixed(2)})</a>`);
+            }
+        });
+
+        if (hits.length === 0) {
+            res.innerHTML = '<span style="color:#aaa;padding:4px 8px;display:block;">Nessun risultato</span>';
+        } else {
+            const shown = hits.slice(0, 8);
+            const more  = hits.length > 8 ? `<span style="color:#888;padding:4px 8px;display:block;">${hits.length-8} altri risultati — affina la ricerca</span>` : '';
+            res.innerHTML = shown.join('') + more;
+        }
+    }
+    // Shortcut Ctrl+F / Cmd+F apre la ricerca globale
+    document.addEventListener('keydown', e => {
+        if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+            e.preventDefault();
+            openGlobalSearch();
+        }
+        if (e.key === 'Escape') closeGlobalSearch();
+    });
+
+    function sendWaFromPreview() {
+        const text = encodeURIComponent(document.getElementById('wa-preview-text').value);
+        window.open(`https://wa.me/${currentWaPreview.tel}?text=${text}`, '_blank');
+        closeModal('wa-preview-modal');
+    }
+
+    function copyWaPreview() {
+        const text = document.getElementById('wa-preview-text');
+        text.select();
+        document.execCommand('copy');
+        showToast('Messaggio copiato negli appunti!');
+    }
+
+    window.onload = () => {
+        // Controllo integrità dati: avvisa se localStorage sembra svuotato
+        checkDataIntegrity();
+        updateSelects();
+        populateBookingYears(); 
+        setDefaultDates(); 
+        renderGantt();
+        updateDashboardCharts();
+        renderBookingList();
+        renderTodayMovements();
+        checkBackupReminder();
+    };
+
+    function checkDataIntegrity() {
+        const fp = localStorage.getItem(LS.dbFingerprint);
+        if (!fp) return; // prima apertura, nessun dato atteso
+        try {
+            const { bookings: expB, expenses: expE, guests: expG } = JSON.parse(fp);
+            const emptyNow = bookings.length === 0 && expenses.length === 0;
+            const hadData  = expB > 0 || expE > 0 || expG > 0;
+            if (emptyNow && hadData) {
+                const snap = localStorage.getItem(LS.emergencyBackup);
+                let msg = `⚠️ ATTENZIONE: il database sembra vuoto, ma in precedenza conteneva ${expB} prenotazioni e ${expE} spese.
+
+Questo può accadere su Safari/iOS quando lo spazio del browser viene liberato automaticamente.
+
+`;
+                msg += snap
+                    ? 'È disponibile un backup di emergenza. Vuoi ripristinarlo ora?'
+                    : 'Non è disponibile un backup di emergenza automatico. Vai in Impostazioni → Importa Backup per ripristinare un file di backup esterno.';
+                if (snap && confirm(msg)) {
+                    restoreEmergencyBackup();
+                } else if (!snap) {
+                    alert(msg);
+                }
+            }
+        } catch(e) { /* fingerprint corrotto, ignora */ }
+    }
+</script>
+</body>
+</html>

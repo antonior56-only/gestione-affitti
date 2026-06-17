@@ -849,7 +849,68 @@
 </div>
 
 <script>
-    // ── NAMESPACE chiavi localStorage ─────────────────────────────
+
+    // ── IndexedDB wrapper (sostituisce localStorage) ─────────────────
+    const PmsDB = (() => {
+        const DB_NAME    = 'pms50_db';
+        const DB_VERSION = 1;
+        const STORE      = 'kv';
+        let _db = null;
+
+        const ready = new Promise((resolve, reject) => {
+            const req = indexedDB.open(DB_NAME, DB_VERSION);
+            req.onupgradeneeded = e => {
+                e.target.result.createObjectStore(STORE);
+            };
+            req.onsuccess = e => { _db = e.target.result; resolve(_db); };
+            req.onerror   = e => { console.error('PmsDB open error', e); reject(e); };
+        });
+
+        const tx = (mode) => _db.transaction(STORE, mode).objectStore(STORE);
+
+        const get = (key) => ready.then(() => new Promise((res, rej) => {
+            const r = tx('readonly').get(key);
+            r.onsuccess = () => res(r.result ?? null);
+            r.onerror   = rej;
+        }));
+
+        const set = (key, value) => ready.then(() => new Promise((res, rej) => {
+            const r = tx('readwrite').put(value, key);
+            r.onsuccess = () => res();
+            r.onerror   = rej;
+        }));
+
+        const remove = (key) => ready.then(() => new Promise((res, rej) => {
+            const r = tx('readwrite').delete(key);
+            r.onsuccess = () => res();
+            r.onerror   = rej;
+        }));
+
+        const clear = () => ready.then(() => new Promise((res, rej) => {
+            const r = tx('readwrite').clear();
+            r.onsuccess = () => res();
+            r.onerror   = rej;
+        }));
+
+        // Migrazione da localStorage: copia tutte le chiavi pms50_* in IndexedDB
+        const migrateFromLocalStorage = () => new Promise(async (resolve) => {
+            const migrated = await get('__idb_migrated__');
+            if (migrated) { resolve(false); return; }
+            const keys = Object.keys(localStorage).filter(k => k.startsWith('pms50_'));
+            for (const k of keys) {
+                const v = localStorage.getItem(k);
+                if (v !== null) await set(k, v);
+            }
+            await set('__idb_migrated__', '1');
+            console.log('[PmsDB] Migrazione da localStorage:', keys.length, 'chiavi');
+            resolve(true);
+        });
+
+        return { ready, get, set, remove, clear, migrateFromLocalStorage };
+    })();
+    // ── Fine wrapper IndexedDB ────────────────────────────────────────
+
+    // ── NAMESPACE chiavi ─────────────────────────────────────────
     const LS = { apps:'pms50_apps', rates:'pms50_rates', settings:'pms50_settings', bookings:'pms50_bookings', expenses:'pms50_expenses', lastBackup:'pms50_lastBackup', guests:'pms50_guests', emergencyBackup:'pms50_emergency', saveCount:'pms50_saveCount', dbFingerprint:'pms50_dbfp', bookingLog:'pms50_log' };
     
     const defaultApps = [{id:1, name:"Appartamento 1", beds:4, notes:""},{id:2, name:"Appartamento 2", beds:2, notes:""},{id:3, name:"Appartamento 3", beds:6, notes:""},{id:4, name:"Appartamento 4", beds:4, notes:""},{id:5, name:"Appartamento 5", beds:3, notes:""}];
@@ -857,19 +918,13 @@
     const defaultRates = [{id:1, appId:0, name:"Giugno", start:`${currentYear}-06-01`, end:`${currentYear}-06-30`, daily:80, weekly:500}];
     const defaultSettings = {taxRate:2.0, maxTaxNights:10, linenPrice:15.0, mapsLink:"", firma:"", sconto:10};
 
-    let apps = JSON.parse(localStorage.getItem(LS.apps)) || defaultApps;
-    let rates = JSON.parse(localStorage.getItem(LS.rates)) || defaultRates;
-    let settings = JSON.parse(localStorage.getItem(LS.settings)) || defaultSettings;
-    if(settings.maxTaxNights === undefined) settings.maxTaxNights = 10;
-    if(settings.mapsLink    === undefined) settings.mapsLink    = "";
-    if(settings.firma       === undefined) settings.firma       = "";
-    if(settings.sconto      === undefined) settings.sconto      = 10;
-    if(settings.seasonStart  === undefined) settings.seasonStart  = "06-01";
-    if(settings.seasonEnd    === undefined) settings.seasonEnd    = "09-30";
-    
-    let bookings = JSON.parse(localStorage.getItem(LS.bookings)) || [];
-    let expenses = JSON.parse(localStorage.getItem(LS.expenses)) || [];
-    let guests   = JSON.parse(localStorage.getItem(LS.guests))   || {};
+    // Dati caricati da IndexedDB all'avvio (vedi initApp)
+    let apps     = defaultApps;
+    let rates    = defaultRates;
+    let settings = Object.assign({}, defaultSettings);
+    let bookings = [];
+    let expenses = [];
+    let guests   = {};
 
     let editingBookingId = null;
     let isPopulatingForm = false; // sopprime updatePreview durante il popolamento
@@ -896,14 +951,14 @@
     }
     
     // GESTIONE FLAG BACKUP E AVVISI
-    let saveCounter = parseInt(localStorage.getItem(LS.saveCount) || '0');
+    let saveCounter = 0; // caricato da IndexedDB in initApp
 
     function markAsModified() {
         needsBackup = true;
         saveCounter++;
-        localStorage.setItem(LS.saveCount, saveCounter);
+        PmsDB.set(LS.saveCount, String(saveCounter));
         // Aggiorna fingerprint: conta prenotazioni e spese
-        localStorage.setItem(LS.dbFingerprint, JSON.stringify({
+        PmsDB.set(LS.dbFingerprint, JSON.stringify({
             bookings: bookings.length,
             expenses: expenses.length,
             guests:   Object.keys(guests).length,
@@ -922,15 +977,14 @@
                 _savedAt: new Date().toISOString(),
                 _saveCount: saveCounter
             });
-            localStorage.setItem(LS.emergencyBackup, snap);
+            PmsDB.set(LS.emergencyBackup, snap);
             console.log(`[PMS] Emergency backup salvato (modifica #${saveCounter})`);
         } catch(e) {
             console.warn('[PMS] Emergency backup fallito:', e);
         }
     }
 
-    let bookingLog = {};
-    try { bookingLog = JSON.parse(localStorage.getItem(LS.bookingLog) || '{}'); } catch(e) {}
+    let bookingLog = {}; // caricato da IndexedDB in initApp
 
     function logBookingChange(bookingId, action, details) {
         if (!bookingLog[bookingId]) bookingLog[bookingId] = [];
@@ -941,26 +995,26 @@
         });
         // Mantieni max 10 voci per prenotazione
         if (bookingLog[bookingId].length > 10) bookingLog[bookingId].shift();
-        try { localStorage.setItem(LS.bookingLog, JSON.stringify(bookingLog)); } catch(e) {}
+        try { PmsDB.set(LS.bookingLog, JSON.stringify(bookingLog)); } catch(e) {}
     }
 
     function getBookingLog(bookingId) {
         return (bookingLog[bookingId] || []).slice().reverse(); // più recenti prima
     }
 
-    function restoreEmergencyBackup() {
-        const snap = localStorage.getItem(LS.emergencyBackup);
+    async function restoreEmergencyBackup() {
+        const snap = await PmsDB.get(LS.emergencyBackup);
         if (!snap) { alert('Nessun backup di emergenza disponibile.'); return; }
         try {
             const data = JSON.parse(snap);
             const when = data._savedAt ? new Date(data._savedAt).toLocaleString('it-IT') : 'data sconosciuta';
             if (!confirm(`Ripristinare il backup di emergenza del ${when}? I dati attuali verranno sovrascritti.`)) return;
-            localStorage.setItem(LS.apps,      JSON.stringify(data.apps));
-            localStorage.setItem(LS.bookings,  JSON.stringify(data.bookings));
-            if (data.rates)    localStorage.setItem(LS.rates,    JSON.stringify(data.rates));
-            if (data.settings) localStorage.setItem(LS.settings, JSON.stringify(data.settings));
-            if (data.expenses) localStorage.setItem(LS.expenses, JSON.stringify(data.expenses));
-            if (data.guests)   localStorage.setItem(LS.guests,   JSON.stringify(data.guests));
+            PmsDB.set(LS.apps,      JSON.stringify(data.apps));
+            PmsDB.set(LS.bookings,  JSON.stringify(data.bookings));
+            if (data.rates)    PmsDB.set(LS.rates,    JSON.stringify(data.rates));
+            if (data.settings) PmsDB.set(LS.settings, JSON.stringify(data.settings));
+            if (data.expenses) PmsDB.set(LS.expenses, JSON.stringify(data.expenses));
+            if (data.guests)   PmsDB.set(LS.guests,   JSON.stringify(data.guests));
             showToast('Backup di emergenza ripristinato!');
             setTimeout(() => location.reload(), 800);
         } catch(e) {
@@ -1084,8 +1138,9 @@
     }
 
     // ── LOGICA CORE RESTANTE ───────────────────────────────────────
-    function checkBackupReminder() {
-        const last = localStorage.getItem(LS.lastBackup);
+    async function checkBackupReminder() {
+        const rawLast = await PmsDB.get(LS.lastBackup);
+        const last = parseInt(rawLast || '0');
         if(!last) { document.getElementById('backup-reminder').style.display='block'; return; }
         const days = (Date.now() - parseInt(last)) / 86400000;
         if(days > 7) document.getElementById('backup-reminder').style.display='block';
@@ -1411,9 +1466,7 @@
         document.getElementById('btn-cancel-edit').style.display = 'none';
         document.getElementById('recalc-price-box').style.display = 'none';
         document.getElementById('chk-recalc-price').checked = false;
-        // Rilegge settings da localStorage per avere il valore più aggiornato
-        const freshSettings = JSON.parse(localStorage.getItem(LS.settings) || '{}');
-        document.getElementById('b-linen').value = freshSettings.linenPrice ?? settings.linenPrice ?? 0;
+        document.getElementById('b-linen').value = settings.linenPrice ?? 0;
         document.getElementById('b-deposit').value = 0;
         document.getElementById('b-deposit-method').value = '';
         document.getElementById('b-balance-paid').value = 0;
@@ -1529,7 +1582,7 @@
         } else {
             bookings.push(b);
         }
-        localStorage.setItem(LS.bookings, JSON.stringify(bookings));
+        PmsDB.set(LS.bookings, JSON.stringify(bookings));
         upsertGuest(b);
         cancelEdit(); 
         populateBookingYears();
@@ -1684,7 +1737,7 @@
     function deleteBooking(id) { 
         if(confirm("Eliminare questa prenotazione? L'operazione è irreversibile.")) { 
             bookings = bookings.filter(b => b.id !== id); 
-            localStorage.setItem(LS.bookings, JSON.stringify(bookings)); 
+            PmsDB.set(LS.bookings, JSON.stringify(bookings)); 
             renderBookingList(); renderGantt(); 
             showToast('Prenotazione eliminata','error'); 
             markAsModified(); // Segnala che serve un backup
@@ -1740,7 +1793,7 @@
         const b = bookings.find(x => x.id === id);
         if(!b) return;
         b.status = document.getElementById('md-status').value;
-        localStorage.setItem(LS.bookings, JSON.stringify(bookings));
+        PmsDB.set(LS.bookings, JSON.stringify(bookings));
         closeModal('detail-modal'); renderBookingList(); renderGantt();
         logBookingChange(id, 'Cambio stato', `Nuovo stato: ${b.status}`);
         showToast('Stato aggiornato!');
@@ -1958,7 +2011,7 @@
         e.preventDefault();
         expenses.push({ id: Date.now(), date: document.getElementById('e-date').value, appId: parseInt(document.getElementById('e-app').value),
             category: document.getElementById('e-cat').value, desc: document.getElementById('e-desc').value, amount: parseFloat(document.getElementById('e-amount').value) });
-        localStorage.setItem(LS.expenses, JSON.stringify(expenses)); 
+        PmsDB.set(LS.expenses, JSON.stringify(expenses)); 
         this.reset(); 
         
         // Reimposta la data odierna dopo aver salvato
@@ -2001,7 +2054,7 @@
     function deleteExpense(id) {
         if(confirm("Eliminare questa spesa?")) {
             expenses = expenses.filter(e=>e.id!==id);
-            localStorage.setItem(LS.expenses, JSON.stringify(expenses));
+            PmsDB.set(LS.expenses, JSON.stringify(expenses));
             renderExpenseList();
             markAsModified(); // Segnala che serve un backup
         }
@@ -2504,8 +2557,7 @@ function calculateFinances() {
         // Info backup emergenza
         const emergInfo = document.getElementById('emergency-backup-info');
         if (emergInfo) {
-            const snap = localStorage.getItem(LS.emergencyBackup);
-            if (snap) {
+            PmsDB.get(LS.emergencyBackup).then(snap => { if (snap) {
                 try {
                     const d = JSON.parse(snap);
                     const when = d._savedAt ? new Date(d._savedAt).toLocaleString('it-IT') : '—';
@@ -2514,7 +2566,9 @@ function calculateFinances() {
                 } catch(e) { emergInfo.textContent = '⚠️ Backup di emergenza presente ma non leggibile.'; }
             } else {
                 emergInfo.textContent = 'Nessun backup di emergenza ancora disponibile (si crea ogni 5 modifiche).';
-            }
+            }}).catch(() => {
+                emergInfo.textContent = 'Nessun backup di emergenza disponibile.';
+            });
         }
         document.getElementById('set-tax-rate').value = settings.taxRate;
         document.getElementById('set-tax-max').value = settings.maxTaxNights;
@@ -2569,7 +2623,7 @@ function calculateFinances() {
                 showToast('Data inizio stagione deve essere prima della fine','error'); return;
             }
         }
-        localStorage.setItem(LS.settings, JSON.stringify(settings));
+        PmsDB.set(LS.settings, JSON.stringify(settings));
         showToast('Impostazioni salvate!');
         markAsModified(); // Segnala che serve un backup
     }
@@ -2605,7 +2659,7 @@ function calculateFinances() {
             a.beds  = parseInt(document.getElementById(`app-b-${i}`).value);
             a.notes = document.getElementById(`app-notes-${i}`)?.value || '';
         });
-        localStorage.setItem(LS.apps, JSON.stringify(apps)); updateSelects(); showToast('Appartamenti salvati!');
+        PmsDB.set(LS.apps, JSON.stringify(apps)); updateSelects(); showToast('Appartamenti salvati!');
         markAsModified(); // Segnala che serve un backup
     }
 
@@ -2633,7 +2687,7 @@ function calculateFinances() {
             alert('⚠️ Errori nelle tariffe:\n\n' + errors.join('\n'));
             return;
         }
-        localStorage.setItem(LS.rates, JSON.stringify(rates));
+        PmsDB.set(LS.rates, JSON.stringify(rates));
         showToast('Tariffe salvate!');
         markAsModified();
     }
@@ -2641,7 +2695,7 @@ function calculateFinances() {
     function saveMessaggiSettings() {
         settings.firma = document.getElementById('set-firma').value;
         settings.sconto = parseInt(document.getElementById('set-sconto').value);
-        localStorage.setItem(LS.settings, JSON.stringify(settings));
+        PmsDB.set(LS.settings, JSON.stringify(settings));
         showToast('Impostazioni messaggi salvate!');
         markAsModified(); // Segnala che serve un backup
     }
@@ -2672,7 +2726,7 @@ function calculateFinances() {
                 await writable.write(dataStr);
                 await writable.close();
                 
-                localStorage.setItem(LS.lastBackup, Date.now().toString());
+                PmsDB.set(LS.lastBackup, Date.now().toString());
                 needsBackup = false;
                 showToast('Backup salvato con successo!');
                 setTimeout(() => { isBackingUp = false; }, 500);
@@ -2706,7 +2760,7 @@ function calculateFinances() {
             document.body.removeChild(a);
             setTimeout(() => { window.URL.revokeObjectURL(url); }, 200);
             
-            localStorage.setItem(LS.lastBackup, Date.now().toString());
+            PmsDB.set(LS.lastBackup, Date.now().toString());
             needsBackup = false;
             showToast('Backup scaricato correttamente!');
         } catch (error) {
@@ -2726,13 +2780,13 @@ function calculateFinances() {
                     alert('Backup non valido o incompatibile.');
                     return;
                 }
-                localStorage.setItem(LS.apps, JSON.stringify(data.apps));
-                localStorage.setItem(LS.bookings, JSON.stringify(data.bookings));
+                PmsDB.set(LS.apps, JSON.stringify(data.apps));
+                PmsDB.set(LS.bookings, JSON.stringify(data.bookings));
             // Ripristino esteso
-            if(data.rates) localStorage.setItem(LS.rates, JSON.stringify(data.rates));
-            if(data.settings) localStorage.setItem(LS.settings, JSON.stringify(data.settings));
-            if(data.expenses) localStorage.setItem(LS.expenses, JSON.stringify(data.expenses));
-            if(data.guests) localStorage.setItem(LS.guests, JSON.stringify(data.guests));
+            if(data.rates) PmsDB.set(LS.rates, JSON.stringify(data.rates));
+            if(data.settings) PmsDB.set(LS.settings, JSON.stringify(data.settings));
+            if(data.expenses) PmsDB.set(LS.expenses, JSON.stringify(data.expenses));
+            if(data.guests) PmsDB.set(LS.guests, JSON.stringify(data.guests));
             location.reload();
             } catch(err) {
                 alert('Errore durante il ripristino del backup.');
@@ -2742,10 +2796,10 @@ function calculateFinances() {
         reader.readAsText(e.target.files[0]);
     }
     
-    function factoryReset() {
+    async function factoryReset() {
         if(confirm("ATTENZIONE: Stai per cancellare TUTTI i dati (prenotazioni, spese, rubrica, impostazioni). L'operazione è IRREVERSIBILE. Vuoi procedere?")) {
             if(confirm("Sei veramente sicuro? Assicurati di aver fatto prima un backup dal pulsante 'Esporta Backup'.")) {
-                Object.values(LS).forEach(k => localStorage.removeItem(k));
+                await Promise.all(Object.values(LS).map(k => PmsDB.remove(k)));
                 alert("Dati resettati con successo. L'applicazione verrà ricaricata.");
                 needsBackup = false; // per evitare che parta l'avviso di chiusura mentre ricarica
                 location.reload();
@@ -2778,7 +2832,7 @@ function calculateFinances() {
             docType: b.docType || existing.docType,
             docNum:  b.docNum  || existing.docNum
         };
-        localStorage.setItem(LS.guests, JSON.stringify(guests));
+        PmsDB.set(LS.guests, JSON.stringify(guests));
     }
 
     function guestAutocomplete(val) {
@@ -3061,28 +3115,86 @@ function calculateFinances() {
         showToast('Messaggio copiato negli appunti!');
     }
 
-    window.onload = () => {
-        // Controllo integrità dati: avvisa se localStorage sembra svuotato
+    // Funzione helper: parse JSON sicuro con fallback
+    function dbParse(val, fallback) {
+        if (val === null || val === undefined) return fallback;
+        try { return JSON.parse(val); } catch(e) { return fallback; }
+    }
+
+    // Applica migration settings (valori mancanti)
+    function applySettingsMigration() {
+        if(settings.maxTaxNights === undefined) settings.maxTaxNights = 10;
+        if(settings.mapsLink    === undefined) settings.mapsLink    = '';
+        if(settings.firma       === undefined) settings.firma       = '';
+        if(settings.sconto      === undefined) settings.sconto      = 10;
+        if(settings.seasonStart === undefined) settings.seasonStart = '06-01';
+        if(settings.seasonEnd   === undefined) settings.seasonEnd   = '09-30';
+    }
+
+    async function initApp() {
+        try {
+            // Migrazione da localStorage (eseguita solo la prima volta)
+            await PmsDB.migrateFromLocalStorage();
+
+            // Carica tutti i dati da IndexedDB
+            const [rawApps, rawRates, rawSettings, rawBookings,
+                   rawExpenses, rawGuests, rawLog, rawSaveCount] = await Promise.all([
+                PmsDB.get(LS.apps),
+                PmsDB.get(LS.rates),
+                PmsDB.get(LS.settings),
+                PmsDB.get(LS.bookings),
+                PmsDB.get(LS.expenses),
+                PmsDB.get(LS.guests),
+                PmsDB.get(LS.bookingLog),
+                PmsDB.get(LS.saveCount),
+            ]);
+
+            apps     = dbParse(rawApps,     defaultApps);
+            rates    = dbParse(rawRates,    defaultRates);
+            settings = dbParse(rawSettings, defaultSettings);
+            bookings = dbParse(rawBookings, []);
+            expenses = dbParse(rawExpenses, []);
+            guests   = dbParse(rawGuests,   {});
+            if (rawLog) try { bookingLog = JSON.parse(rawLog); } catch(e) {}
+            if (rawSaveCount) saveCounter = parseInt(rawSaveCount) || 0;
+
+            applySettingsMigration();
+
+        } catch(e) {
+            console.error('[PmsDB] Errore caricamento dati:', e);
+            // Fallback a localStorage se IndexedDB fallisce
+            apps     = dbParse(localStorage.getItem(LS.apps),     defaultApps);
+            rates    = dbParse(localStorage.getItem(LS.rates),     defaultRates);
+            settings = dbParse(localStorage.getItem(LS.settings),  defaultSettings);
+            bookings = dbParse(localStorage.getItem(LS.bookings),  []);
+            expenses = dbParse(localStorage.getItem(LS.expenses),  []);
+            guests   = dbParse(localStorage.getItem(LS.guests),    {});
+            applySettingsMigration();
+        }
+
+        // Ora i dati sono in memoria — inizializza l'UI
         checkDataIntegrity();
         updateSelects();
-        populateBookingYears(); 
-        setDefaultDates(); 
+        populateBookingYears();
+        setDefaultDates();
         renderGantt();
         updateDashboardCharts();
         renderBookingList();
         renderTodayMovements();
         checkBackupReminder();
-    };
+    }
 
-    function checkDataIntegrity() {
-        const fp = localStorage.getItem(LS.dbFingerprint);
+    window.onload = () => initApp();
+
+    async function checkDataIntegrity() {
+        const fp = await PmsDB.get(LS.dbFingerprint);
         if (!fp) return; // prima apertura, nessun dato atteso
         try {
             const { bookings: expB, expenses: expE, guests: expG } = JSON.parse(fp);
             const emptyNow = bookings.length === 0 && expenses.length === 0;
             const hadData  = expB > 0 || expE > 0 || expG > 0;
             if (emptyNow && hadData) {
-                const snap = localStorage.getItem(LS.emergencyBackup);
+                const snap = await PmsDB.get(LS.emergencyBackup);
                 let msg = `⚠️ ATTENZIONE: il database sembra vuoto, ma in precedenza conteneva ${expB} prenotazioni e ${expE} spese.
 
 Questo può accadere su Safari/iOS quando lo spazio del browser viene liberato automaticamente.
